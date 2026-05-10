@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YT Playlist Player</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div id="sidebar-header">
+      <div id="playlist-title">Loading…</div>
+      <div id="track-count"></div>
+    </div>
+    <div id="track-list"></div>
+  </aside>
+
+  <main id="main">
+    <div id="player-area">
+      <div id="status-overlay">Loading playlist…</div>
+      <div id="player-wrap">
+        <div id="yt-player"></div>
+      </div>
+    </div>
+    <div id="now-playing-bar">
+      <div id="now-playing-title"><span>Now playing:</span>–</div>
+      <button class="ctrl-btn" id="btn-prev">&#8592; Prev</button>
+      <button class="ctrl-btn" id="btn-next">Next &#8594;</button>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="player.js"></script>
+</body>
+</html>
