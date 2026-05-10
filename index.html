@@ -11,10 +11,55 @@
 <div id="app">
   <aside id="sidebar">
     <div id="sidebar-header">
-      <div id="playlist-title">Loading…</div>
-      <div id="track-count"></div>
+      <div id="sidebar-header-row">
+        <div id="playlist-picker" aria-label="Select playlist">
+          <div id="playlist-picker-selected">
+            <div id="playlist-title">Loading…</div>
+            <div id="track-count"></div>
+            <span id="playlist-picker-arrow">&#9660;</span>
+          </div>
+          <div id="playlist-picker-dropdown" hidden></div>
+        </div>
+        <button id="btn-settings" title="Settings">&#8942;</button>
+      </div>
     </div>
     <div id="track-list"></div>
+
+    <div id="settings-overlay" hidden>
+      <div class="settings-header">
+        <span class="settings-title">Settings</span>
+        <button id="settings-close" class="settings-close-btn">&#10005;</button>
+      </div>
+      <div class="settings-body">
+
+        <section class="settings-section">
+          <label class="settings-checkbox-row">
+            <input type="checkbox" id="setting-hide-restricted" autocomplete="off">
+            <span>Hide restricted tracks</span>
+          </label>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-section-title">Playlists</div>
+          <div id="settings-playlist-list"></div>
+          <label class="drop-zone" id="settings-drop-zone">
+            <input type="file" id="settings-file-input" accept=".json">
+            <span>&#8853; Drop or click to add playlist JSON</span>
+          </label>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-section-title">Failed video IDs</div>
+          <div id="settings-failed-count" class="settings-muted">No failed videos recorded.</div>
+          <div class="settings-scan-row">
+            <button class="settings-btn" id="settings-scan-btn">Scan All Tracks</button>
+            <button class="settings-btn" id="settings-copy-failed">Copy to clipboard</button>
+          </div>
+          <div id="settings-scan-status" class="settings-muted" hidden></div>
+        </section>
+
+      </div>
+    </div>
   </aside>
 
   <main id="main">

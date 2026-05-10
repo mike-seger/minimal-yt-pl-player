@@ -1,0 +1,298 @@
+// ── Persistence keys ──────────────────────────────────────────────────────────
+const SETTINGS_KEY = 'yt-pl-player.settings.v1';
+const FAILED_KEY   = 'yt-pl-player.failed.v1';
+const CUSTOM_KEY   = 'yt-pl-player.custom.v1';
+
+// ── Settings state ────────────────────────────────────────────────────────────
+function _loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return {
+      hideRestricted:  !!s.hideRestricted,
+      hiddenPlaylists: Array.isArray(s.hiddenPlaylists) ? s.hiddenPlaylists : [],
+    };
+  } catch { return { hideRestricted: false, hiddenPlaylists: [] }; }
+}
+function _saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings)); } catch {}
+}
+let _settings = _loadSettings();
+
+export function isHideRestricted()   { return _settings.hideRestricted; }
+export function getHiddenPlaylists() { return new Set(_settings.hiddenPlaylists); }
+
+export function setHideRestricted(val) {
+  _settings.hideRestricted = !!val;
+  _saveSettings();
+  _cb.onHideRestrictedChange?.();
+}
+
+export function toggleHiddenPlaylist(url) {
+  const set = new Set(_settings.hiddenPlaylists);
+  set.has(url) ? set.delete(url) : set.add(url);
+  _settings.hiddenPlaylists = [...set];
+  _saveSettings();
+  _cb.onPlaylistsChange?.();
+}
+
+// ── Failed video IDs ──────────────────────────────────────────────────────────
+function _loadFailed() {
+  try { return new Set(JSON.parse(localStorage.getItem(FAILED_KEY) || '[]')); } catch { return new Set(); }
+}
+function _saveFailed() {
+  try { localStorage.setItem(FAILED_KEY, JSON.stringify([..._failedIds])); } catch {}
+}
+let _failedIds = _loadFailed();
+
+export function recordFailedId(id) {
+  if (!id || _failedIds.has(id)) return;
+  _failedIds.add(id);
+  _saveFailed();
+  _renderFailedSection();
+}
+
+// ── Custom playlists ──────────────────────────────────────────────────────────
+function _loadCustom() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]'); } catch { return []; }
+}
+function _saveCustom() {
+  try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(_customPlaylists)); } catch {}
+}
+let _customPlaylists = _loadCustom();
+
+export function getCustomPlaylists()      { return _customPlaylists; }
+export function getCustomPlaylistById(id) { return _customPlaylists.find(p => p.id === id) ?? null; }
+
+export function addCustomPlaylist(data) {
+  const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const entry = {
+    id,
+    title: (typeof data.title === 'string' && data.title.trim()) || 'Custom playlist',
+    fetchedAt: data.fetchedAt || new Date().toISOString(),
+    items: Array.isArray(data.items)
+      ? data.items.map(it => ({
+          videoId: String(it.videoId ?? ''),
+          title: it.userTitle || it.title || it.videoId || '',
+          ...(it.restricted ? { restricted: true } : {}),
+        }))
+      : [],
+  };
+  _customPlaylists.push(entry);
+  _saveCustom();
+  _cb.onPlaylistsChange?.();
+  if (_overlayEl && !_overlayEl.hidden) _renderPlaylistSection();
+  return entry;
+}
+
+export function deleteCustomPlaylist(id) {
+  _customPlaylists = _customPlaylists.filter(p => p.id !== id);
+  _saveCustom();
+  _cb.onPlaylistsChange?.();
+}
+
+// ── Callbacks injected by player.js ──────────────────────────────────────────
+const _cb = { onHideRestrictedChange: null, onPlaylistsChange: null, onOpen: null, startScan: null, cancelScan: null };
+let _getAllPlaylists = null;
+
+// ── DOM elements (set after DOMContentLoaded via initSettings) ────────────────
+let _overlayEl, _listEl, _failedCountEl, _hideRestrictedCb, _scanBtn, _scanStatus;
+
+export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAllPlaylists, onOpen, startScan, cancelScan }) {
+  _cb.onHideRestrictedChange = onHideRestrictedChange;
+  _cb.onPlaylistsChange      = onPlaylistsChange;
+  _cb.onOpen                 = onOpen;
+  _cb.startScan              = startScan;
+  _cb.cancelScan             = cancelScan;
+  _getAllPlaylists            = getAllPlaylists;
+
+  _overlayEl        = document.getElementById('settings-overlay');
+  _listEl           = document.getElementById('settings-playlist-list');
+  _failedCountEl    = document.getElementById('settings-failed-count');
+  _hideRestrictedCb = document.getElementById('setting-hide-restricted');
+  _scanBtn          = document.getElementById('settings-scan-btn');
+  _scanStatus       = document.getElementById('settings-scan-status');
+
+  _hideRestrictedCb.checked = _settings.hideRestricted;
+  _hideRestrictedCb.addEventListener('change', () => setHideRestricted(_hideRestrictedCb.checked));
+
+  document.getElementById('settings-close').addEventListener('click', closeSettings);
+  document.getElementById('btn-settings').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openSettings();
+  });
+
+  const copyBtn = document.getElementById('settings-copy-failed');
+  copyBtn.addEventListener('click', async () => {
+    const ids = [..._failedIds];
+    if (!ids.length) return;
+    const text = ids.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => { copyBtn.textContent = 'Copy to clipboard'; }, 2000);
+  });
+
+  let _scanning = false;
+  _scanBtn.addEventListener('click', () => {
+    if (_scanning) {
+      _cb.cancelScan?.();
+      _scanning = false;
+      _scanBtn.textContent = 'Scan All Tracks';
+      _scanStatus.hidden = false;
+      _scanStatus.textContent = 'Scan stopped.';
+      return;
+    }
+    _scanning = true;
+    _scanBtn.textContent = 'Stop Scan';
+    _scanStatus.hidden = false;
+    _scanStatus.textContent = 'Starting scan…';
+    _cb.startScan?.(({ scanned, total, found, title, done }) => {
+      if (done) {
+        _scanning = false;
+        _scanBtn.textContent = 'Scan All Tracks';
+        _scanStatus.textContent = `Scan complete — ${found} new failure${found !== 1 ? 's' : ''} found out of ${total} tracks.`;
+        _renderFailedSection();
+        return;
+      }
+      const label = title ? ` · ${title.length > 38 ? title.slice(0, 36) + '…' : title}` : '';
+      _scanStatus.textContent = `Scanning ${scanned}/${total} · ${found} new failure${found !== 1 ? 's' : ''}${label}`;
+    });
+  });
+
+  // File drop / click-to-upload
+  const dropZone  = document.getElementById('settings-drop-zone');
+  const fileInput = document.getElementById('settings-file-input');
+
+  dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) _ingestFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) _ingestFile(fileInput.files[0]);
+    fileInput.value = '';
+  });
+}
+
+export function openSettings() {
+  _cb.onOpen?.();
+  _renderPlaylistSection();
+  _renderFailedSection();
+  _overlayEl.hidden = false;
+}
+
+export function closeSettings() {
+  _overlayEl.hidden = true;
+}
+
+// ── Internal renderers ────────────────────────────────────────────────────────
+function _renderPlaylistSection() {
+  if (!_listEl || !_getAllPlaylists) return;
+  const hidden = getHiddenPlaylists();
+  _listEl.innerHTML = '';
+
+  _getAllPlaylists().forEach(({ url, title, playableCount, restrictedCount, isCustom, id }) => {
+    const isHidden = hidden.has(url);
+    const row = document.createElement('div');
+    row.className = 'settings-pl-row';
+    const countStr = restrictedCount
+      ? `${playableCount} tracks · <em>${restrictedCount} restricted</em>`
+      : `${playableCount} tracks`;
+
+    row.innerHTML = `
+      <label class="settings-pl-toggle">
+        <input type="checkbox" ${isHidden ? '' : 'checked'} autocomplete="off">
+        <span class="settings-pl-info">
+          <span class="settings-pl-name">${_esc(title)}</span>
+          <span class="settings-pl-meta">${countStr}</span>
+        </span>
+      </label>
+      <div class="settings-pl-actions">
+        <button class="settings-icon-btn" title="Download">&#11015;</button>
+        ${isCustom ? `<button class="settings-icon-btn danger" title="Delete">&#10005;</button>` : ''}
+      </div>`;
+
+    row.querySelector('input[type=checkbox]').addEventListener('change', () => {
+      toggleHiddenPlaylist(url);
+      _renderPlaylistSection();
+    });
+    row.querySelector('[title="Download"]').addEventListener('click', () =>
+      _downloadPlaylist(url, title, isCustom ? id : null));
+
+    if (isCustom) {
+      row.querySelector('[title="Delete"]').addEventListener('click', () => {
+        deleteCustomPlaylist(id);
+        _renderPlaylistSection();
+      });
+    }
+
+    _listEl.appendChild(row);
+  });
+}
+
+function _renderFailedSection() {
+  if (!_failedCountEl) return;
+  const n = _failedIds.size;
+  _failedCountEl.textContent = n === 0
+    ? 'No failed videos recorded.'
+    : `${n} video ID${n !== 1 ? 's' : ''} recorded.`;
+}
+
+async function _downloadPlaylist(url, title, customId) {
+  let data;
+  if (customId) {
+    data = getCustomPlaylistById(customId);
+    if (!data) return;
+  } else {
+    try {
+      const resp = await fetch(url, { cache: 'no-store' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      data = await resp.json();
+    } catch { alert('Failed to download playlist.'); return; }
+  }
+  // Apply recorded failed IDs as restricted:true on items not already marked
+  if (Array.isArray(data.items) && _failedIds.size > 0) {
+    data = {
+      ...data,
+      items: data.items.map(it =>
+        !it.restricted && _failedIds.has(it.videoId) ? { ...it, restricted: true } : it
+      ),
+    };
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: `${title.replace(/[^\w\s-]/g, '').trim() || 'playlist'}.json`,
+  });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+}
+
+function _ingestFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data.items)) {
+        alert('Invalid playlist: missing "items" array.');
+        return;
+      }
+      addCustomPlaylist(data);
+      _renderPlaylistSection();
+    } catch { alert('Could not parse file as JSON.'); }
+  };
+  reader.readAsText(file);
+}
+
+function _esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
