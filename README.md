@@ -21,8 +21,8 @@ minimal-yt-pl-player/
 ├── index.html              # HTML shell
 ├── player.js               # All player logic (ES module)
 ├── style.css               # Styles
-└── video-hosted/
-    ├── default-playlists.json   # Array of playlist JSON paths to load (first entry used)
+└── playlists/
+    ├── playlists.json               # Array of playlist JSON paths to load (first entry used)
     └── pl_*.json                # Playlist data files
 ```
 
@@ -31,7 +31,7 @@ minimal-yt-pl-player/
 `default-playlists.json` is an array of paths relative to `index.html`:
 
 ```json
-["./video-hosted/pl_2025-1_wave_alternatives.json"]
+["./playlists/pl_2025-1_wave_alternatives.json"]
 ```
 
 Each playlist JSON file has the shape:

@@ -133,7 +133,7 @@ async function loadPlaylist() {
 
   let defaultsList;
   try {
-    defaultsList = await fetchJson('./video-hosted/default-playlists.json');
+    defaultsList = await fetchJson('./playlists/playlists.json');
   } catch (err) {
     statusOverlay.textContent = `Failed to load playlist index: ${err.message}`;
     return;
