@@ -1,17 +1,22 @@
+import {
+  getCustomPlaylists, getCustomPlaylistById,
+  addCustomPlaylist, deleteCustomPlaylist, renameCustomPlaylist,
+  downloadPlaylist, ingestFile,
+} from './playlist.js';
+
 // ── Persistence keys ──────────────────────────────────────────────────────────
 const SETTINGS_KEY = 'yt-pl-player.settings.v1';
 const FAILED_KEY   = 'yt-pl-player.failed.v1';
-const CUSTOM_KEY   = 'yt-pl-player.custom.v1';
 
 // ── Settings state ────────────────────────────────────────────────────────────
 function _loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     return {
-      hideRestricted:  !!s.hideRestricted,
+      hideRestricted:  'hideRestricted' in s ? !!s.hideRestricted : true,
       hiddenPlaylists: Array.isArray(s.hiddenPlaylists) ? s.hiddenPlaylists : [],
     };
-  } catch { return { hideRestricted: false, hiddenPlaylists: [] }; }
+  } catch { return { hideRestricted: true, hiddenPlaylists: [] }; }
 }
 function _saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings)); } catch {}
@@ -44,50 +49,13 @@ function _saveFailed() {
 }
 let _failedIds = _loadFailed();
 
+export function getFailedIds() { return _failedIds; }
+
 export function recordFailedId(id) {
   if (!id || _failedIds.has(id)) return;
   _failedIds.add(id);
   _saveFailed();
   _renderFailedSection();
-}
-
-// ── Custom playlists ──────────────────────────────────────────────────────────
-function _loadCustom() {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]'); } catch { return []; }
-}
-function _saveCustom() {
-  try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(_customPlaylists)); } catch {}
-}
-let _customPlaylists = _loadCustom();
-
-export function getCustomPlaylists()      { return _customPlaylists; }
-export function getCustomPlaylistById(id) { return _customPlaylists.find(p => p.id === id) ?? null; }
-
-export function addCustomPlaylist(data) {
-  const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const entry = {
-    id,
-    title: (typeof data.title === 'string' && data.title.trim()) || 'Custom playlist',
-    fetchedAt: data.fetchedAt || new Date().toISOString(),
-    items: Array.isArray(data.items)
-      ? data.items.map(it => ({
-          videoId: String(it.videoId ?? ''),
-          title: it.userTitle || it.title || it.videoId || '',
-          ...(it.restricted ? { restricted: true } : {}),
-        }))
-      : [],
-  };
-  _customPlaylists.push(entry);
-  _saveCustom();
-  _cb.onPlaylistsChange?.();
-  if (_overlayEl && !_overlayEl.hidden) _renderPlaylistSection();
-  return entry;
-}
-
-export function deleteCustomPlaylist(id) {
-  _customPlaylists = _customPlaylists.filter(p => p.id !== id);
-  _saveCustom();
-  _cb.onPlaylistsChange?.();
 }
 
 // ── Callbacks injected by player.js ──────────────────────────────────────────
@@ -119,6 +87,14 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
   document.getElementById('btn-settings').addEventListener('click', (e) => {
     e.stopPropagation();
     openSettings();
+  });
+
+  const clearBtn = document.getElementById('settings-clear-failed');
+  clearBtn.addEventListener('click', () => {
+    if (!_failedIds.size) return;
+    _failedIds.clear();
+    localStorage.setItem(FAILED_KEY, JSON.stringify([]));
+    _renderFailedSection();
   });
 
   const copyBtn = document.getElementById('settings-copy-failed');
@@ -175,10 +151,10 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
   dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
-    if (e.dataTransfer.files[0]) _ingestFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files[0]) _handleFileUpload(e.dataTransfer.files[0]);
   });
   fileInput.addEventListener('change', () => {
-    if (fileInput.files[0]) _ingestFile(fileInput.files[0]);
+    if (fileInput.files[0]) _handleFileUpload(fileInput.files[0]);
     fileInput.value = '';
   });
 }
@@ -212,7 +188,10 @@ function _renderPlaylistSection() {
       <label class="settings-pl-toggle">
         <input type="checkbox" ${isHidden ? '' : 'checked'} autocomplete="off">
         <span class="settings-pl-info">
-          <span class="settings-pl-name">${_esc(title)}</span>
+          ${isCustom
+            ? `<input class="settings-pl-rename" type="text" value="${_esc(title)}" autocomplete="off" spellcheck="false" aria-label="Rename playlist">`
+            : `<span class="settings-pl-name">${_esc(title)}</span>`
+          }
           <span class="settings-pl-meta">${countStr}</span>
         </span>
       </label>
@@ -225,15 +204,39 @@ function _renderPlaylistSection() {
       toggleHiddenPlaylist(url);
       _renderPlaylistSection();
     });
-    row.querySelector('[title="Download"]').addEventListener('click', () =>
-      _downloadPlaylist(url, title, isCustom ? id : null));
 
     if (isCustom) {
+      const renameInput = row.querySelector('.settings-pl-rename');
+      renameInput.addEventListener('click', (e) => e.preventDefault());
+      renameInput.addEventListener('change', () => {
+        renameCustomPlaylist(id, renameInput.value);
+        _cb.onPlaylistsChange?.();
+      });
+      renameInput.addEventListener('blur', () => {
+        renameCustomPlaylist(id, renameInput.value);
+        _cb.onPlaylistsChange?.();
+      });
+
       row.querySelector('[title="Delete"]').addEventListener('click', () => {
         deleteCustomPlaylist(id);
+        _cb.onPlaylistsChange?.();
         _renderPlaylistSection();
       });
     }
+
+    row.querySelector('[title="Download"]').addEventListener('click', () =>
+      downloadPlaylist({
+        url,
+        title,
+        customId: isCustom ? id : null,
+        failedIds: _failedIds,
+        fetchFn: async (u) => {
+          const r = await fetch(u, { cache: 'no-store' });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        },
+      })
+    );
 
     _listEl.appendChild(row);
   });
@@ -247,50 +250,14 @@ function _renderFailedSection() {
     : `${n} video ID${n !== 1 ? 's' : ''} recorded.`;
 }
 
-async function _downloadPlaylist(url, title, customId) {
-  let data;
-  if (customId) {
-    data = getCustomPlaylistById(customId);
-    if (!data) return;
-  } else {
-    try {
-      const resp = await fetch(url, { cache: 'no-store' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      data = await resp.json();
-    } catch { alert('Failed to download playlist.'); return; }
+async function _handleFileUpload(file) {
+  try {
+    await ingestFile(file, _failedIds);
+    _cb.onPlaylistsChange?.();
+    _renderPlaylistSection();
+  } catch (err) {
+    alert(`Could not import playlist: ${err.message}`);
   }
-  // Apply recorded failed IDs as restricted:true on items not already marked
-  if (Array.isArray(data.items) && _failedIds.size > 0) {
-    data = {
-      ...data,
-      items: data.items.map(it =>
-        !it.restricted && _failedIds.has(it.videoId) ? { ...it, restricted: true } : it
-      ),
-    };
-  }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(blob),
-    download: `${title.replace(/[^\w\s-]/g, '').trim() || 'playlist'}.json`,
-  });
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
-}
-
-function _ingestFile(file) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (!Array.isArray(data.items)) {
-        alert('Invalid playlist: missing "items" array.');
-        return;
-      }
-      addCustomPlaylist(data);
-      _renderPlaylistSection();
-    } catch { alert('Could not parse file as JSON.'); }
-  };
-  reader.readAsText(file);
 }
 
 function _esc(s) {

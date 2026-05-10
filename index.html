@@ -23,6 +23,9 @@
         <button id="btn-settings" title="Settings">&#8942;</button>
       </div>
     </div>
+    <div id="track-filter-wrap">
+      <input id="track-filter" type="search" placeholder="Filter tracks…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
     <div id="track-list"></div>
 
     <div id="settings-overlay" hidden>
@@ -43,8 +46,8 @@
           <div class="settings-section-title">Playlists</div>
           <div id="settings-playlist-list"></div>
           <label class="drop-zone" id="settings-drop-zone">
-            <input type="file" id="settings-file-input" accept=".json">
-            <span>&#8853; Drop or click to add playlist JSON</span>
+            <input type="file" id="settings-file-input" accept=".json,.tsv,.csv">
+            <span>&#8853; Drop or click to add playlist (JSON / TSV / CSV)</span>
           </label>
         </section>
 
@@ -54,6 +57,7 @@
           <div class="settings-scan-row">
             <button class="settings-btn" id="settings-scan-btn">Scan All Tracks</button>
             <button class="settings-btn" id="settings-copy-failed">Copy to clipboard</button>
+            <button class="settings-btn" id="settings-clear-failed">Clear</button>
           </div>
           <div id="settings-scan-status" class="settings-muted" hidden></div>
         </section>

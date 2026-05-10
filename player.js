@@ -1,10 +1,14 @@
 import {
   isHideRestricted, getHiddenPlaylists,
-  getCustomPlaylists, getCustomPlaylistById,
   initSettings, recordFailedId,
 } from './settings.js';
+import {
+  getCustomPlaylists, getCustomPlaylistById,
+  getPlaylistState, savePlaylistState,
+} from './playlist.js';
 
 // ── Resume persistence ────────────────────────────────────────────────────────
+// Global resume only stores last active playlistUrl; per-playlist state is in playlist.js
 const RESUME_KEY = 'yt-pl-player.resume.v1';
 const RESUME_SAVE_INTERVAL_MS = 10_000;
 
@@ -13,25 +17,21 @@ function loadResume() {
     const raw = localStorage.getItem(RESUME_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    if (typeof s.index !== 'number' || typeof s.positionSec !== 'number') return null;
-    return s;  // may also contain .playlistUrl
-  } catch {
-    return null;
-  }
+    return s;  // { playlistUrl? }
+  } catch { return null; }
+}
+
+function saveResumeUrl() {
+  try {
+    localStorage.setItem(RESUME_KEY, JSON.stringify({ playlistUrl: activePlaylistUrl ?? null }));
+  } catch {}
 }
 
 function saveResume(index, positionSec) {
-  try {
-    const prev = loadResume() ?? {};
-    localStorage.setItem(RESUME_KEY, JSON.stringify({
-      ...prev,
-      index,
-      positionSec,
-      playlistUrl: activePlaylistUrl ?? prev.playlistUrl ?? null,
-    }));
-  } catch {
-    // ignore (private mode, storage full, …)
+  if (activePlaylistUrl) {
+    savePlaylistState(activePlaylistUrl, { index, positionSec });
   }
+  saveResumeUrl();
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -41,6 +41,7 @@ let ytPlayer = null;
 let ytReady = false;
 let pendingLoad = null;   // { videoId, positionSec } to apply once the player is ready
 let resumeSaveTimer = null;
+let activeFilter = '';    // current filter string for the active playlist
 
 // Scan state (separate from normal playback)
 let _scanActive = false;
@@ -57,6 +58,7 @@ const btnPrev            = document.getElementById('btn-prev');
 const btnNext            = document.getElementById('btn-next');
 const pickerEl           = document.getElementById('playlist-picker');
 const pickerDropdownEl   = document.getElementById('playlist-picker-dropdown');
+const filterInputEl      = document.getElementById('track-filter');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function escapeHtml(s) {
@@ -234,6 +236,12 @@ function rebuildAllPlaylists() {
 }
 
 async function switchPlaylist(url, restoreResume = false) {
+  // Save current filter and position before switching
+  if (activePlaylistUrl && currentIndex >= 0 && ytReady && ytPlayer) {
+    try { saveResume(currentIndex, Math.floor(ytPlayer.getCurrentTime() ?? 0)); } catch {}
+  }
+  if (activePlaylistUrl) savePlaylistState(activePlaylistUrl, { filter: activeFilter });
+
   statusOverlay.textContent = 'Loading playlist…';
   statusOverlay.classList.remove('hidden');
 
@@ -266,6 +274,11 @@ async function switchPlaylist(url, restoreResume = false) {
     : `${playableCount} tracks`;
   document.title = `${title} – YT Player`;
 
+  // Restore per-playlist state
+  const plState = getPlaylistState(url);
+  activeFilter = plState.filter ?? '';
+  filterInputEl.value = activeFilter;
+
   currentIndex = -1;
   renderTrackList();
   renderPickerDropdown();
@@ -274,9 +287,8 @@ async function switchPlaylist(url, restoreResume = false) {
   if (!items.length) return;
 
   if (restoreResume) {
-    const resume = loadResume();
-    const startIndex = (resume && resume.index >= 0 && resume.index < items.length) ? resume.index : 0;
-    const startPos   = (resume && resume.index === startIndex) ? (resume.positionSec ?? 0) : 0;
+    const startIndex = (plState.index >= 0 && plState.index < items.length) ? plState.index : 0;
+    const startPos   = plState.positionSec ?? 0;
     playIndex(startIndex, startPos);
   } else {
     playIndex(0);
@@ -362,8 +374,7 @@ async function loadPlaylist() {
 
   // Start with saved playlist (if still available and not hidden), else first non-hidden
   const hidden = getHiddenPlaylists();
-  const resume = loadResume();
-  const savedUrl = resume?.playlistUrl;
+  const savedUrl = loadResume()?.playlistUrl;
   const startUrl = (
     savedUrl &&
     allPlaylists.some(p => p.url === savedUrl && !hidden.has(p.url))
@@ -376,6 +387,13 @@ async function loadPlaylist() {
   }
 }
 
+// ── Filter helpers ────────────────────────────────────────────────────────────
+function matchesFilter(item) {
+  if (!activeFilter || activeFilter.length < 2) return true;
+  const haystack = (item.title || item.videoId || '').toLowerCase();
+  return activeFilter.toLowerCase().split(/\s+/).filter(Boolean).every(tok => haystack.includes(tok));
+}
+
 // ── Track list rendering ──────────────────────────────────────────────────────
 function renderTrackList() {
   trackListEl.innerHTML = '';
@@ -385,6 +403,7 @@ function renderTrackList() {
   items.forEach((item, idx) => {
     const restricted = !!item.restricted;
     if (hideRestricted && restricted) return;
+    if (!matchesFilter(item)) return;
     displayNum++;
 
     const el = document.createElement('div');
@@ -519,6 +538,15 @@ document.addEventListener('touchend', (e) => {
   if (dx < 0 ? currentIndex < items.length - 1 : currentIndex > 0)
     playIndex(dx < 0 ? currentIndex + 1 : currentIndex - 1, 0, dx < 0 ? 1 : -1);
 }, { passive: true });
+
+// ── Filter input ──────────────────────────────────────────────────────────────
+filterInputEl.addEventListener('input', () => {
+  activeFilter = filterInputEl.value;
+  if (activePlaylistUrl) savePlaylistState(activePlaylistUrl, { filter: activeFilter });
+  renderTrackList();
+  // Re-sync active highlight after re-render
+  if (currentIndex >= 0) syncActiveTrack(0);
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadYTScript();

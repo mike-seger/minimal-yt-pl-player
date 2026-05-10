@@ -339,6 +339,42 @@ html, body {
 }
 .settings-scan-row .settings-btn { flex: 1; }
 
+#track-filter-wrap {
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+#track-filter {
+    display: block;
+    width: 100%;
+    background: var(--bg);
+    border: none;
+    border-radius: 0;
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 12px;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+#track-filter::placeholder { color: var(--text-muted); }
+#track-filter:focus { border-color: var(--accent); }
+/* Hide native clear button in webkit */
+#track-filter::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+.settings-pl-rename {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 2px 6px;
+    outline: none;
+    min-width: 0;
+}
+.settings-pl-rename:focus { border-color: var(--accent); }
+
 #track-list {
     flex: 1;
     overflow-y: auto;
