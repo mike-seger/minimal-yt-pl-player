@@ -28,10 +28,10 @@ minimal-yt-pl-player/
 
 ## Playlist format
 
-`default-playlists.json` is an array of paths relative to `index.html`:
+`playlists.json` is an array of paths **relative to `playlists.json` itself**:
 
 ```json
-["./playlists/pl_2025-1_wave_alternatives.json"]
+["./pl_2025-1_wave_alternatives.json"]
 ```
 
 Each playlist JSON file has the shape:

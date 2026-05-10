@@ -131,9 +131,10 @@ async function loadPlaylist() {
   statusOverlay.textContent = 'Loading playlist index…';
   statusOverlay.classList.remove('hidden');
 
+  const playlistsUrl = './playlists/playlists.json';
   let defaultsList;
   try {
-    defaultsList = await fetchJson('./playlists/playlists.json');
+    defaultsList = await fetchJson(playlistsUrl);
   } catch (err) {
     statusOverlay.textContent = `Failed to load playlist index: ${err.message}`;
     return;
@@ -147,7 +148,10 @@ async function loadPlaylist() {
   statusOverlay.textContent = 'Loading playlist…';
   let playlist;
   try {
-    playlist = await fetchJson(defaultsList[0]);
+    // Resolve each entry relative to playlists.json, not the page
+    const base = new URL(playlistsUrl, window.location.href);
+    const playlistUrl = new URL(defaultsList[0], base).href;
+    playlist = await fetchJson(playlistUrl);
   } catch (err) {
     statusOverlay.textContent = `Failed to load playlist: ${err.message}`;
     return;
@@ -201,12 +205,27 @@ function renderTrackList() {
   });
 }
 
-function syncActiveTrack() {
+function syncActiveTrack(dir = 0) {
   trackListEl.querySelectorAll('.track-item').forEach((el, idx) => {
     el.classList.toggle('active', idx === currentIndex);
   });
-  trackListEl.querySelector('.track-item.active')
-    ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+  const activeEl = trackListEl.querySelector('.track-item.active');
+  if (activeEl) {
+    const listRect = trackListEl.getBoundingClientRect();
+    const elRect   = activeEl.getBoundingClientRect();
+
+    if (dir >= 0 && elRect.bottom > listRect.bottom) {
+      // moving forward and item is below visible area → align to top
+      const elTopInScroll = elRect.top - listRect.top + trackListEl.scrollTop;
+      trackListEl.scrollTo({ top: elTopInScroll, behavior: 'smooth' });
+    } else if (dir <= 0 && elRect.top < listRect.top) {
+      // moving backward and item is above visible area → align to bottom
+      const elBottomInScroll = elRect.bottom - listRect.top + trackListEl.scrollTop;
+      trackListEl.scrollTo({ top: elBottomInScroll - trackListEl.clientHeight, behavior: 'smooth' });
+    }
+    // already visible → no scroll
+  }
 
   const item  = items[currentIndex];
   const label = item ? (item.title || item.videoId || '') : '–';
@@ -227,7 +246,7 @@ function playIndex(idx, positionSec = 0, dir = 0) {
   }
 
   currentIndex = idx;
-  syncActiveTrack();
+  syncActiveTrack(dir);
   const videoId = item?.videoId ? String(item.videoId) : '';
   if (!videoId) { playIndex(idx + 1); return; }
 
