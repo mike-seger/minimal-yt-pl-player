@@ -15,8 +15,9 @@ function _loadSettings() {
     return {
       hideRestricted:  'hideRestricted' in s ? !!s.hideRestricted : true,
       hiddenPlaylists: Array.isArray(s.hiddenPlaylists) ? s.hiddenPlaylists : [],
+      nameOverrides:   (s.nameOverrides && typeof s.nameOverrides === 'object') ? s.nameOverrides : {},
     };
-  } catch { return { hideRestricted: true, hiddenPlaylists: [] }; }
+  } catch { return { hideRestricted: true, hiddenPlaylists: [], nameOverrides: {} }; }
 }
 function _saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings)); } catch {}
@@ -25,6 +26,16 @@ let _settings = _loadSettings();
 
 export function isHideRestricted()   { return _settings.hideRestricted; }
 export function getHiddenPlaylists() { return new Set(_settings.hiddenPlaylists); }
+export function getPlaylistNameOverride(url) { return _settings.nameOverrides[url] ?? null; }
+export function setPlaylistNameOverride(url, name) {
+  const trimmed = name.trim();
+  if (trimmed) {
+    _settings.nameOverrides[url] = trimmed;
+  } else {
+    delete _settings.nameOverrides[url];
+  }
+  _saveSettings();
+}
 
 export function setHideRestricted(val) {
   _settings.hideRestricted = !!val;
@@ -178,6 +189,8 @@ function _renderPlaylistSection() {
 
   _getAllPlaylists().forEach(({ url, title, playableCount, restrictedCount, isCustom, id }) => {
     const isHidden = hidden.has(url);
+    // Display name: user override takes priority over the fetched title
+    const displayTitle = getPlaylistNameOverride(url) ?? title;
     const row = document.createElement('div');
     row.className = 'settings-pl-row';
     const countStr = restrictedCount
@@ -185,16 +198,13 @@ function _renderPlaylistSection() {
       : `${playableCount} tracks`;
 
     row.innerHTML = `
-      <label class="settings-pl-toggle">
+      <div class="settings-pl-toggle">
         <input type="checkbox" ${isHidden ? '' : 'checked'} autocomplete="off">
         <span class="settings-pl-info">
-          ${isCustom
-            ? `<input class="settings-pl-rename" type="text" value="${_esc(title)}" autocomplete="off" spellcheck="false" aria-label="Rename playlist">`
-            : `<span class="settings-pl-name">${_esc(title)}</span>`
-          }
+          <input class="settings-pl-rename" type="text" value="${_esc(displayTitle)}" autocomplete="off" spellcheck="false" aria-label="Rename playlist">
           <span class="settings-pl-meta">${countStr}</span>
         </span>
-      </label>
+      </div>
       <div class="settings-pl-actions">
         <button class="settings-icon-btn" title="Download">&#11015;</button>
         ${isCustom ? `<button class="settings-icon-btn danger" title="Delete">&#10005;</button>` : ''}
@@ -205,24 +215,27 @@ function _renderPlaylistSection() {
       _renderPlaylistSection();
     });
 
-    if (isCustom) {
-      const renameInput = row.querySelector('.settings-pl-rename');
-      renameInput.addEventListener('click', (e) => e.preventDefault());
-      renameInput.addEventListener('change', () => {
+    const renameInput = row.querySelector('.settings-pl-rename');
+    renameInput.addEventListener('click', (e) => e.stopPropagation());
+    const _saveRename = () => {
+      if (isCustom) {
         renameCustomPlaylist(id, renameInput.value);
-        _cb.onPlaylistsChange?.();
-      });
-      renameInput.addEventListener('blur', () => {
-        renameCustomPlaylist(id, renameInput.value);
-        _cb.onPlaylistsChange?.();
-      });
+      } else {
+        setPlaylistNameOverride(url, renameInput.value);
+      }
+      _cb.onPlaylistsChange?.();
+    };
+    renameInput.addEventListener('change', _saveRename);
+    renameInput.addEventListener('blur',   _saveRename);
 
+    if (isCustom) {
       row.querySelector('[title="Delete"]').addEventListener('click', () => {
         deleteCustomPlaylist(id);
         _cb.onPlaylistsChange?.();
         _renderPlaylistSection();
       });
     }
+
 
     row.querySelector('[title="Download"]').addEventListener('click', () =>
       downloadPlaylist({

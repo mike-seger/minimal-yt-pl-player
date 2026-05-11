@@ -11,6 +11,7 @@
     --active-border: #4a9eff;
     --hover-bg: #222;
     --thumb-size: 56px;
+    --track-item-height: 52px;
 }
 
 html, body {
@@ -243,7 +244,7 @@ html, body {
     gap: 8px;
     flex: 1;
     min-width: 0;
-    cursor: pointer;
+    cursor: default;
 }
 .settings-pl-toggle input[type=checkbox] {
     margin-top: 2px;
@@ -251,6 +252,7 @@ html, body {
     accent-color: var(--accent);
     width: 15px;
     height: 15px;
+    cursor: pointer;
 }
 .settings-pl-info {
     display: flex;
@@ -393,6 +395,10 @@ html, body {
     cursor: pointer;
     border-left: 3px solid transparent;
     transition: background 0.12s;
+    height: var(--track-item-height);
+    overflow: hidden;
+    flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .track-item:hover { background: var(--hover-bg); }
@@ -405,7 +411,7 @@ html, body {
 .track-num {
     font-size: 11px;
     color: var(--text-muted);
-    width: 24px;
+    min-width: 24px;
     text-align: right;
     flex-shrink: 0;
 }

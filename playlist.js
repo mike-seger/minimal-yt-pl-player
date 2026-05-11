@@ -1,15 +1,18 @@
 // ── playlist.js ───────────────────────────────────────────────────────────────
 // Handles:
-//  • Custom playlist CRUD + localStorage persistence
-//  • Per-playlist state (resume index, positionSec, filter)
+//  • Custom playlist CRUD — IndexedDB persistence (falls back to localStorage)
+//  • Per-playlist state (resume index, positionSec, filter) — localStorage
 //  • Ingesting JSON / CSV / TSV uploads
 //  • ZIP + JSON/TSV download via JSZip CDN
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CUSTOM_KEY   = 'yt-pl-player.custom.v1';
-const PL_STATE_KEY = 'yt-pl-player.pl-state.v1'; // { [url]: {index, positionSec, filter} }
+const CUSTOM_LS_KEY = 'yt-pl-player.custom.v1'; // legacy / fallback key
+const PL_STATE_KEY  = 'yt-pl-player.pl-state.v1';
+const IDB_NAME      = 'yt-pl-player';
+const IDB_VERSION   = 1;
+const IDB_STORE     = 'custom-playlists';
 
-// ── Per-playlist state ────────────────────────────────────────────────────────
+// ── Per-playlist state (localStorage — small, no size concern) ────────────────
 let _plState = (() => {
   try { return JSON.parse(localStorage.getItem(PL_STATE_KEY) || '{}'); } catch { return {}; }
 })();
@@ -27,15 +30,99 @@ export function savePlaylistState(url, state) {
   _savePlState();
 }
 
-// ── Custom playlists ──────────────────────────────────────────────────────────
-let _customPlaylists = (() => {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]'); } catch { return []; }
-})();
+// ── IndexedDB helpers ─────────────────────────────────────────────────────────
+let _db = null; // set by initCustomPlaylists; null means use localStorage fallback
 
-function _saveCustom() {
-  try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(_customPlaylists)); } catch {}
+function _openIdb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror   = (e) => reject(e.target.error);
+  });
 }
 
+function _idbGetAll(db) {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).getAll();
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror   = (e) => reject(e.target.error);
+  });
+}
+
+function _idbPut(db, entry) {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).put(entry);
+    req.onsuccess = () => resolve();
+    req.onerror   = (e) => reject(e.target.error);
+  });
+}
+
+function _idbDelete(db, id) {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror   = (e) => reject(e.target.error);
+  });
+}
+
+// ── Custom playlist in-memory cache ───────────────────────────────────────────
+// Reads are always from this array (synchronous).
+// Writes go to IDB (async, fire-and-forget) or localStorage (fallback).
+let _customPlaylists = [];
+
+function _persistPut(entry) {
+  if (_db) {
+    _idbPut(_db, entry).catch(err => console.error('[playlist] IDB write failed', err));
+  } else {
+    try { localStorage.setItem(CUSTOM_LS_KEY, JSON.stringify(_customPlaylists)); } catch {}
+  }
+}
+
+function _persistDelete(id) {
+  if (_db) {
+    _idbDelete(_db, id).catch(err => console.error('[playlist] IDB delete failed', err));
+  } else {
+    try { localStorage.setItem(CUSTOM_LS_KEY, JSON.stringify(_customPlaylists)); } catch {}
+  }
+}
+
+// ── initCustomPlaylists ───────────────────────────────────────────────────────
+// Exported promise — await this in player.js before first use of getCustomPlaylists().
+// Opens IDB, migrates any existing localStorage data, populates _customPlaylists cache.
+export const initCustomPlaylists = (async () => {
+  try {
+    _db = await _openIdb();
+    const existing = await _idbGetAll(_db);
+
+    if (existing.length > 0) {
+      // IDB already has data
+      _customPlaylists = existing;
+    } else {
+      // Attempt migration from localStorage
+      const lsRaw = localStorage.getItem(CUSTOM_LS_KEY);
+      if (lsRaw) {
+        const parsed = JSON.parse(lsRaw);
+        if (Array.isArray(parsed) && parsed.length) {
+          await Promise.all(parsed.map(entry => _idbPut(_db, entry)));
+          _customPlaylists = parsed;
+          localStorage.removeItem(CUSTOM_LS_KEY);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[playlist] IndexedDB unavailable, falling back to localStorage:', err);
+    _db = null;
+    try { _customPlaylists = JSON.parse(localStorage.getItem(CUSTOM_LS_KEY) || '[]'); } catch { _customPlaylists = []; }
+  }
+})();
+
+// ── Custom playlist CRUD ──────────────────────────────────────────────────────
 export function getCustomPlaylists()      { return _customPlaylists; }
 export function getCustomPlaylistById(id) { return _customPlaylists.find(p => p.id === id) ?? null; }
 
@@ -54,20 +141,20 @@ export function addCustomPlaylist(data) {
       : [],
   };
   _customPlaylists.push(entry);
-  _saveCustom();
+  _persistPut(entry);
   return entry;
 }
 
 export function deleteCustomPlaylist(id) {
   _customPlaylists = _customPlaylists.filter(p => p.id !== id);
-  _saveCustom();
+  _persistDelete(id);
 }
 
 export function renameCustomPlaylist(id, newTitle) {
   const pl = _customPlaylists.find(p => p.id === id);
   if (!pl) return;
   pl.title = newTitle.trim() || pl.title;
-  _saveCustom();
+  _persistPut(pl);
 }
 
 // ── Parsing ───────────────────────────────────────────────────────────────────
@@ -214,6 +301,15 @@ export async function downloadPlaylist({ url, title, customId, failedIds = new S
       items: data.items.map(it =>
         !it.restricted && failedIds.has(it.videoId) ? { ...it, restricted: true } : it
       ),
+    };
+  }
+
+  // Embed pre-computed counts so playlists.json entries can skip the full-file prefetch
+  if (Array.isArray(data.items)) {
+    data = {
+      ...data,
+      playableCount:   data.items.filter(it => !it.restricted).length,
+      restrictedCount: data.items.filter(it =>  it.restricted).length,
     };
   }
 

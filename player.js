@@ -1,11 +1,19 @@
 import {
   isHideRestricted, getHiddenPlaylists,
   initSettings, recordFailedId,
+  getPlaylistNameOverride,
 } from './settings.js';
 import {
   getCustomPlaylists, getCustomPlaylistById,
   getPlaylistState, savePlaylistState,
+  initCustomPlaylists,
 } from './playlist.js';
+
+// ── Rendering thresholds ──────────────────────────────────────────────────────
+// Below FULL_RENDER_THRESHOLD (post-filter count) every matching item gets a DOM node.
+// At or above it we switch to virtual scrolling. Increase if you want full DOM at larger sizes.
+const FULL_RENDER_THRESHOLD = 5_000;
+const VSCROLL_ITEM_H = 52; // px — must match --track-item-height in style.css
 
 // ── Resume persistence ────────────────────────────────────────────────────────
 // Global resume only stores last active playlistUrl; per-playlist state is in playlist.js
@@ -47,6 +55,10 @@ let activeFilter = '';    // current filter string for the active playlist
 let _scanActive = false;
 let _scanCurrentItem = null;  // item being tested during scan
 let _scanResolveTrack = null; // resolves the per-track promise
+
+// Virtual-scroll state
+let _vsItems = [];            // current post-filter [{ item, idx }] array in virtual mode
+let _vsScrollHandler = null;  // active scroll listener so we can detach on mode switch
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const trackListEl        = document.getElementById('track-list');
@@ -227,12 +239,15 @@ function rebuildAllPlaylists() {
   const customPls = getCustomPlaylists().map(pl => ({
     url: `custom:${pl.id}`,
     id: pl.id,
-    title: pl.title,
+    title: getPlaylistNameOverride(`custom:${pl.id}`) ?? pl.title,
     playableCount:   pl.items?.filter(it => !it.restricted).length ?? 0,
     restrictedCount: pl.items?.filter(it =>  it.restricted).length ?? 0,
     isCustom: true,
   }));
-  allPlaylists = [...remotePlaylistMeta, ...customPls];
+  allPlaylists = [...remotePlaylistMeta.map(p => ({
+    ...p,
+    title: getPlaylistNameOverride(p.url) ?? p.title,
+  })), ...customPls];
 }
 
 async function switchPlaylist(url, restoreResume = false) {
@@ -264,7 +279,8 @@ async function switchPlaylist(url, restoreResume = false) {
 
   activePlaylistUrl = url;
   items = Array.isArray(playlist.items) ? playlist.items : [];
-  const title = (typeof playlist.title === 'string' && playlist.title.trim()) || 'Playlist';
+  const rawTitle = (typeof playlist.title === 'string' && playlist.title.trim()) || 'Playlist';
+  const title = getPlaylistNameOverride(url) ?? rawTitle;
   const playableCount   = items.filter(it => !it.restricted).length;
   const restrictedCount = items.filter(it =>  it.restricted).length;
 
@@ -325,6 +341,9 @@ document.addEventListener('click', (e) => {
 });
 
 async function loadPlaylist() {
+  // Ensure custom playlists are loaded from IndexedDB before we build allPlaylists
+  await initCustomPlaylists;
+
   statusOverlay.textContent = 'Loading playlist index…';
   statusOverlay.classList.remove('hidden');
 
@@ -341,19 +360,38 @@ async function loadPlaylist() {
     return;
   }
 
-  // Resolve URLs relative to playlists.json
+  // Resolve URLs relative to playlists.json.
+  // playlists.json entries can be:
+  //   - a plain string path (existing format) → full fetch required for metadata
+  //   - an object { url, title, playableCount?, restrictedCount? } → skip full fetch
   const base = new URL(PLAYLISTS_URL, window.location.href);
-  const resolved = entries.map(e => new URL(e, base).href);
 
-  // Prefetch metadata (title + counts) for all remote playlists
-  remotePlaylistMeta = await Promise.all(resolved.map(async url => {
+  // Normalise each entry into { url, inlineMeta? }
+  const resolved = entries.map(e => {
+    if (typeof e === 'string') return { url: new URL(e, base).href, inlineMeta: null };
+    if (e && typeof e === 'object' && e.url) return { url: new URL(e.url, base).href, inlineMeta: e };
+    return null;
+  }).filter(Boolean);
+
+  // Prefetch metadata (title + counts) for all remote playlists.
+  // If the entry already carries metadata we skip the full-file fetch.
+  remotePlaylistMeta = await Promise.all(resolved.map(async ({ url, inlineMeta }) => {
+    if (inlineMeta && inlineMeta.title) {
+      return {
+        url,
+        title:           inlineMeta.title,
+        playableCount:   inlineMeta.playableCount   ?? 0,
+        restrictedCount: inlineMeta.restrictedCount ?? 0,
+        isCustom: false,
+      };
+    }
     try {
       const pl = await fetchJson(url);
       return {
         url,
         title:           pl.title || url,
-        playableCount:   pl.items?.filter(it => !it.restricted).length ?? 0,
-        restrictedCount: pl.items?.filter(it =>  it.restricted).length ?? 0,
+        playableCount:   pl.playableCount   ?? pl.items?.filter(it => !it.restricted).length ?? 0,
+        restrictedCount: pl.restrictedCount ?? pl.items?.filter(it =>  it.restricted).length ?? 0,
         isCustom: false,
       };
     } catch {
@@ -394,61 +432,162 @@ function matchesFilter(item) {
   return activeFilter.toLowerCase().split(/\s+/).filter(Boolean).every(tok => haystack.includes(tok));
 }
 
-// ── Track list rendering ──────────────────────────────────────────────────────
-function renderTrackList() {
-  trackListEl.innerHTML = '';
+// Returns the post-filter, post-hideRestricted array used by both renderers.
+// Each entry: { item, idx (true array index), displayNum (1-based gapless) }
+function _buildVisibleItems() {
   const hideRestricted = isHideRestricted();
+  const result = [];
   let displayNum = 0;
-
   items.forEach((item, idx) => {
-    const restricted = !!item.restricted;
-    if (hideRestricted && restricted) return;
+    if (hideRestricted && item.restricted) return;
     if (!matchesFilter(item)) return;
     displayNum++;
-
-    const el = document.createElement('div');
-    el.className = 'track-item' + (idx === currentIndex ? ' active' : '') + (restricted ? ' restricted' : '');
-    el.dataset.idx = idx;
-    if (restricted) el.title = 'Not available in your region';
-
-    const raw = item.title || item.videoId || `Track ${displayNum}`;
-    const { artist, song } = splitTitle(raw);
-    const thumb = item.videoId ? ytThumb(item.videoId) : (item.thumbnail || item.artwork || '');
-
-    el.innerHTML = `
-      <span class="track-num">${displayNum}</span>
-      ${thumb ? `<img class="track-thumb" src="${escapeAttr(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
-      <div class="track-info">
-        <div class="track-title">${escapeHtml(artist || song)}</div>
-        ${artist ? `<div class="track-subtitle">${escapeHtml(song)}</div>` : ''}
-      </div>`;
-
-    el.addEventListener('click', () => { if (!restricted) playIndex(idx); });
-    trackListEl.appendChild(el);
+    result.push({ item, idx, displayNum });
   });
+  return result;
+}
+
+// ── Track item DOM builder (shared by both renderers) ─────────────────────────
+function _makeTrackEl({ item, idx, displayNum }) {
+  const restricted = !!item.restricted;
+  const el = document.createElement('div');
+  el.className = 'track-item' + (idx === currentIndex ? ' active' : '') + (restricted ? ' restricted' : '');
+  el.dataset.idx = idx;
+  if (restricted) el.title = 'Not available in your region';
+
+  const raw = item.title || item.videoId || `Track ${displayNum}`;
+  const { artist, song } = splitTitle(raw);
+  const thumb = item.videoId ? ytThumb(item.videoId) : (item.thumbnail || item.artwork || '');
+
+  el.innerHTML = `
+    <span class="track-num">${displayNum}</span>
+    ${thumb ? `<img class="track-thumb" src="${escapeAttr(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+    <div class="track-info">
+      <div class="track-title">${escapeHtml(artist || song)}</div>
+      ${artist ? `<div class="track-subtitle">${escapeHtml(song)}</div>` : ''}
+    </div>`;
+
+  el.addEventListener('click', () => { if (!restricted) playIndex(idx); });
+  return el;
+}
+
+// ── Full rendering (used below threshold) ─────────────────────────────────────
+function _enterFullMode(visibleItems) {
+  _detachVScroll();
+  trackListEl.innerHTML = '';
+  for (const entry of visibleItems) {
+    trackListEl.appendChild(_makeTrackEl(entry));
+  }
+}
+
+// ── Virtual scrolling (used at or above threshold) ────────────────────────────
+function _detachVScroll() {
+  if (_vsScrollHandler) {
+    trackListEl.removeEventListener('scroll', _vsScrollHandler);
+    _vsScrollHandler = null;
+  }
+  _vsItems = [];
+}
+
+function _renderVSlice() {
+  const runway = document.getElementById('track-list-runway');
+  if (!runway) return;
+
+  const scrollTop    = trackListEl.scrollTop;
+  const clientHeight = trackListEl.clientHeight;
+  const count        = _vsItems.length;
+  const BUFFER       = 8;
+
+  const startVis = Math.floor(scrollTop / VSCROLL_ITEM_H);
+  const endVis   = Math.ceil((scrollTop + clientHeight) / VSCROLL_ITEM_H);
+  const start    = Math.max(0, startVis - BUFFER);
+  const end      = Math.min(count - 1, endVis + BUFFER);
+
+  // Remove nodes outside the new window
+  for (const child of [...runway.children]) {
+    const di = parseInt(child.dataset.di, 10);
+    if (di < start || di > end) runway.removeChild(child);
+  }
+
+  // Collect which display-indices are already rendered
+  const rendered = new Set();
+  for (const child of runway.children) rendered.add(parseInt(child.dataset.di, 10));
+
+  // Add missing nodes
+  for (let di = start; di <= end; di++) {
+    if (rendered.has(di)) continue;
+    const entry = _vsItems[di];
+    const el    = _makeTrackEl(entry);
+    el.style.cssText = `position:absolute;top:${di * VSCROLL_ITEM_H}px;left:0;right:0;width:100%`;
+    el.dataset.di    = di;
+    runway.appendChild(el);
+  }
+}
+
+function _enterVScrollMode(visibleItems) {
+  _detachVScroll();
+  _vsItems = visibleItems;
+
+  trackListEl.innerHTML = '';
+  const runway = document.createElement('div');
+  runway.id = 'track-list-runway';
+  runway.style.cssText = `position:relative;height:${visibleItems.length * VSCROLL_ITEM_H}px`;
+  trackListEl.appendChild(runway);
+
+  _vsScrollHandler = _renderVSlice;
+  trackListEl.addEventListener('scroll', _vsScrollHandler, { passive: true });
+  _renderVSlice();
+}
+
+// ── Track list rendering ──────────────────────────────────────────────────────
+function renderTrackList() {
+  const visibleItems = _buildVisibleItems();
+  if (visibleItems.length <= FULL_RENDER_THRESHOLD) {
+    _enterFullMode(visibleItems);
+  } else {
+    _enterVScrollMode(visibleItems);
+  }
 }
 
 function syncActiveTrack(dir = 0) {
+  const isVirtual = !!_vsScrollHandler;
+
+  if (isVirtual) {
+    // Find the display-index of the active item in the virtual list
+    const di = _vsItems.findIndex(v => v.idx === currentIndex);
+    if (di !== -1) {
+      const itemTop    = di * VSCROLL_ITEM_H;
+      const itemBottom = itemTop + VSCROLL_ITEM_H;
+      const st         = trackListEl.scrollTop;
+      const ch         = trackListEl.clientHeight;
+
+      if (dir >= 0 && itemBottom > st + ch) {
+        trackListEl.scrollTo({ top: itemTop, behavior: 'smooth' });
+      } else if (dir <= 0 && itemTop < st) {
+        trackListEl.scrollTo({ top: itemBottom - ch, behavior: 'smooth' });
+      }
+      // Ensure the node is in the DOM after the potential scroll
+      _renderVSlice();
+    }
+  } else {
+    const activeEl = trackListEl.querySelector(`.track-item[data-idx="${currentIndex}"]`);
+    if (activeEl) {
+      const listRect = trackListEl.getBoundingClientRect();
+      const elRect   = activeEl.getBoundingClientRect();
+      if (dir >= 0 && elRect.bottom > listRect.bottom) {
+        const elTopInScroll = elRect.top - listRect.top + trackListEl.scrollTop;
+        trackListEl.scrollTo({ top: elTopInScroll, behavior: 'smooth' });
+      } else if (dir <= 0 && elRect.top < listRect.top) {
+        const elBottomInScroll = elRect.bottom - listRect.top + trackListEl.scrollTop;
+        trackListEl.scrollTo({ top: elBottomInScroll - trackListEl.clientHeight, behavior: 'smooth' });
+      }
+    }
+  }
+
+  // Update active class on all currently-rendered track items
   trackListEl.querySelectorAll('.track-item').forEach(el => {
     el.classList.toggle('active', parseInt(el.dataset.idx, 10) === currentIndex);
   });
-
-  const activeEl = trackListEl.querySelector(`.track-item[data-idx="${currentIndex}"]`);
-  if (activeEl) {
-    const listRect = trackListEl.getBoundingClientRect();
-    const elRect   = activeEl.getBoundingClientRect();
-
-    if (dir >= 0 && elRect.bottom > listRect.bottom) {
-      // moving forward and item is below visible area → align to top
-      const elTopInScroll = elRect.top - listRect.top + trackListEl.scrollTop;
-      trackListEl.scrollTo({ top: elTopInScroll, behavior: 'smooth' });
-    } else if (dir <= 0 && elRect.top < listRect.top) {
-      // moving backward and item is above visible area → align to bottom
-      const elBottomInScroll = elRect.bottom - listRect.top + trackListEl.scrollTop;
-      trackListEl.scrollTo({ top: elBottomInScroll - trackListEl.clientHeight, behavior: 'smooth' });
-    }
-    // already visible → no scroll
-  }
 
   const item  = items[currentIndex];
   const label = item ? (item.title || item.videoId || '') : '–';
@@ -540,12 +679,15 @@ document.addEventListener('touchend', (e) => {
 }, { passive: true });
 
 // ── Filter input ──────────────────────────────────────────────────────────────
+let _filterDebounceTimer = null;
 filterInputEl.addEventListener('input', () => {
   activeFilter = filterInputEl.value;
   if (activePlaylistUrl) savePlaylistState(activePlaylistUrl, { filter: activeFilter });
-  renderTrackList();
-  // Re-sync active highlight after re-render
-  if (currentIndex >= 0) syncActiveTrack(0);
+  clearTimeout(_filterDebounceTimer);
+  _filterDebounceTimer = setTimeout(() => {
+    renderTrackList();
+    if (currentIndex >= 0) syncActiveTrack(0);
+  }, 150);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
