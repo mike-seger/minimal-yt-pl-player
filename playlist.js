@@ -226,7 +226,9 @@ export function ingestFile(file, failedIds = new Set()) {
     reader.onload = (e) => {
       try {
         const text = e.target.result;
-        const name = file.name.toLowerCase();
+        const originalName = String(file.name || '').trim();
+        const name = originalName.toLowerCase();
+        const fallbackTitle = (originalName.replace(/\.[^.]+$/, '').trim()) || 'Custom playlist';
         let data;
         if (name.endsWith('.json')) {
           data = _parseJson(text);
@@ -245,6 +247,9 @@ export function ingestFile(file, failedIds = new Set()) {
               !it.restricted && failedIds.has(it.videoId) ? { ...it, restricted: true } : it
             ),
           };
+        }
+        if (typeof data.title !== 'string' || !data.title.trim()) {
+          data = { ...data, title: fallbackTitle };
         }
         resolve(addCustomPlaylist(data));
       } catch (err) {

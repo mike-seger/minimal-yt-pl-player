@@ -96,6 +96,10 @@ function ytThumb(videoId) {
   return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
 }
 
+function ytWatch(videoId) {
+  return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+}
+
 async function fetchJson(url) {
   const resp = await fetch(url, { cache: 'no-store' });
   if (!resp.ok) throw new Error(`HTTP ${resp.status} – ${url}`);
@@ -450,14 +454,25 @@ function _buildVisibleItems() {
 // ── Track item DOM builder (shared by both renderers) ─────────────────────────
 function _makeTrackEl({ item, idx, displayNum }) {
   const restricted = !!item.restricted;
+  const videoId = item?.videoId ? String(item.videoId) : '';
   const el = document.createElement('div');
   el.className = 'track-item' + (idx === currentIndex ? ' active' : '') + (restricted ? ' restricted' : '');
   el.dataset.idx = idx;
-  if (restricted) el.title = 'Not available in your region';
+  if (restricted) {
+    el.title = videoId
+      ? 'Not available in your region. Middle-click, cmd/ctrl-click, or long-press to open on YouTube.'
+      : 'Not available in your region';
+  }
 
   const raw = item.title || item.videoId || `Track ${displayNum}`;
   const { artist, song } = splitTitle(raw);
-  const thumb = item.videoId ? ytThumb(item.videoId) : (item.thumbnail || item.artwork || '');
+  const thumb = videoId ? ytThumb(videoId) : (item.thumbnail || item.artwork || '');
+  let longPressTriggered = false;
+
+  const openRestrictedTrack = () => {
+    if (!restricted || !videoId) return;
+    window.open(ytWatch(videoId), 'yt-restricted-track', 'noopener,noreferrer');
+  };
 
   el.innerHTML = `
     <span class="track-num">${displayNum}</span>
@@ -467,7 +482,69 @@ function _makeTrackEl({ item, idx, displayNum }) {
       ${artist ? `<div class="track-subtitle">${escapeHtml(song)}</div>` : ''}
     </div>`;
 
-  el.addEventListener('click', () => { if (!restricted) playIndex(idx); });
+  if (restricted && videoId) {
+    let longPressStartX = 0;
+    let longPressStartY = 0;
+    let longPressStartAt = 0;
+    let longPressMoved = false;
+    let touchActive = false;
+
+    el.addEventListener('mousedown', (e) => {
+      if (e.button === 1) e.preventDefault();
+    });
+
+    el.addEventListener('auxclick', (e) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      openRestrictedTrack();
+    });
+
+    el.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      longPressTriggered = false;
+      touchActive = true;
+      longPressMoved = false;
+      longPressStartAt = Date.now();
+      longPressStartX = e.touches[0].clientX;
+      longPressStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e) => {
+      if (!touchActive || e.touches.length !== 1) return;
+      const dx = Math.abs(e.touches[0].clientX - longPressStartX);
+      const dy = Math.abs(e.touches[0].clientY - longPressStartY);
+      if (dx > 12 || dy > 12) longPressMoved = true;
+    }, { passive: true });
+
+    el.addEventListener('touchend', () => {
+      if (!touchActive) return;
+      touchActive = false;
+      const heldMs = Date.now() - longPressStartAt;
+      if (!longPressMoved && heldMs >= 500) {
+        longPressTriggered = true;
+        openRestrictedTrack();
+      }
+    }, { passive: true });
+
+    el.addEventListener('touchcancel', () => {
+      touchActive = false;
+      longPressMoved = true;
+    }, { passive: true });
+  }
+
+  el.addEventListener('click', (e) => {
+    if (restricted && videoId && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      openRestrictedTrack();
+      return;
+    }
+    if (longPressTriggered) {
+      longPressTriggered = false;
+      e.preventDefault();
+      return;
+    }
+    if (!restricted) playIndex(idx);
+  });
   return el;
 }
 
