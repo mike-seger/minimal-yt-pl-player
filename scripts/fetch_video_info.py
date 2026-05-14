@@ -4,6 +4,7 @@ Fetch YouTube video metadata for all video IDs in pl.gz.
 
 Usage:
     python3 scripts/fetch_video_info.py [--limit N] [--input PATH] [--output PATH]
+                                         [--retries N] [--retry-delay SECONDS]
 
 Environment:
     gapikey  — YouTube Data API v3 key
@@ -58,7 +59,8 @@ def read_video_ids(input_path: str) -> list[str]:
     return ids
 
 
-def fetch_batch(video_ids: list[str], api_key: str) -> list[dict]:
+def fetch_batch(video_ids: list[str], api_key: str,
+                retries: int = 3, retry_delay: float = 30.0) -> list[dict]:
     """Call the YouTube videos.list API for a batch of up to 50 IDs."""
     params = urllib.parse.urlencode({
         "part": PARTS,
@@ -67,14 +69,31 @@ def fetch_batch(video_ids: list[str], api_key: str) -> list[dict]:
     })
     url = f"{YOUTUBE_VIDEOS_URL}?{params}"
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            return body.get("items", [])
-    except urllib.error.HTTPError as exc:
-        error_body = exc.read().decode("utf-8", errors="replace")
-        print(f"[error] HTTP {exc.code}: {error_body}", file=sys.stderr)
-        raise
+    attempt = 0
+    while True:
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+                return body.get("items", [])
+        except urllib.error.HTTPError as exc:
+            error_body = exc.read().decode("utf-8", errors="replace")
+            # 4xx errors (except 429 rate-limit) are not retryable
+            if exc.code != 429 and 400 <= exc.code < 500:
+                print(f"[error] HTTP {exc.code}: {error_body}", file=sys.stderr)
+                raise
+            if attempt >= retries:
+                print(f"[error] HTTP {exc.code} after {retries} retries: {error_body}", file=sys.stderr)
+                raise
+            attempt += 1
+            print(f"[warn] HTTP {exc.code} — retry {attempt}/{retries} in {retry_delay}s …", file=sys.stderr)
+            time.sleep(retry_delay)
+        except (urllib.error.URLError, OSError) as exc:
+            if attempt >= retries:
+                print(f"[error] Network error after {retries} retries: {exc}", file=sys.stderr)
+                raise
+            attempt += 1
+            print(f"[warn] Network error ({exc}) — retry {attempt}/{retries} in {retry_delay}s …", file=sys.stderr)
+            time.sleep(retry_delay)
 
 
 def main():
@@ -85,6 +104,10 @@ def main():
                         help="Path to the gzipped TSV input file (default: pl.gz)")
     parser.add_argument("--output", default="scripts/video_info.json",
                         help="Path to the JSON output file (default: scripts/video_info.json)")
+    parser.add_argument("--retries", type=int, default=3,
+                        help="Number of retries on network/server errors (default: 3)")
+    parser.add_argument("--retry-delay", type=float, default=30.0,
+                        help="Seconds to wait between retries (default: 30)")
     args = parser.parse_args()
 
     api_key = os.environ.get("gapikey")
@@ -118,7 +141,7 @@ def main():
     fetched = 0
     for batch_start in range(0, len(pending), BATCH_SIZE):
         batch = pending[batch_start:batch_start + BATCH_SIZE]
-        items = fetch_batch(batch, api_key)
+        items = fetch_batch(batch, api_key, retries=args.retries, retry_delay=args.retry_delay)
         for item in items:
             results[item["id"]] = item
         fetched += len(items)
