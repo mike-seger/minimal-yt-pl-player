@@ -30,6 +30,32 @@ export function savePlaylistState(url, state) {
   _savePlState();
 }
 
+// ── Per-playlist restricted overrides ────────────────────────────────────────
+// Stored in _plState[url].restricted as { [videoId]: true | false }.
+// Absence of a key means unknown/unscanned (null state).
+// This is intentionally per-playlist: the same videoId in two playlists
+// has independent restricted state.
+export function getRestrictedOverrides(url) {
+  return _plState[url]?.restricted ?? {};
+}
+
+export function saveRestrictedOverride(url, videoId, value) {
+  if (!_plState[url]) _plState[url] = {};
+  if (!_plState[url].restricted) _plState[url].restricted = {};
+  if (value === null || value === undefined) {
+    delete _plState[url].restricted[videoId];
+  } else {
+    _plState[url].restricted[videoId] = value;
+  }
+  _savePlState();
+}
+
+export function clearRestrictedOverrides(url) {
+  if (!_plState[url]) return;
+  delete _plState[url].restricted;
+  _savePlState();
+}
+
 // ── IndexedDB helpers ─────────────────────────────────────────────────────────
 let _db = null; // set by initCustomPlaylists; null means use localStorage fallback
 
@@ -133,11 +159,17 @@ export function addCustomPlaylist(data) {
     title: (typeof data.title === 'string' && data.title.trim()) || 'Custom playlist',
     fetchedAt: data.fetchedAt || new Date().toISOString(),
     items: Array.isArray(data.items)
-      ? data.items.map(it => ({
-          videoId: String(it.videoId ?? ''),
-          title: it.userTitle || it.title || it.videoId || '',
-          ...(it.restricted ? { restricted: true } : {}),
-        }))
+      ? data.items.map(it => {
+          const item = {
+            videoId: String(it.videoId ?? ''),
+            title: it.userTitle || it.title || it.videoId || '',
+          };
+          // Preserve three-state restricted: true | false | absent (unknown)
+          if (it.restricted === true)  item.restricted = true;
+          else if (it.restricted === false) item.restricted = false;
+          // null / undefined → omit the property (unknown/unscanned state)
+          return item;
+        })
       : [],
   };
   _customPlaylists.push(entry);
@@ -211,16 +243,17 @@ function _parseSeparated(text) {
     const videoId = cols[videoIdCol] ?? '';
     if (!videoId) continue;
     const title = cols[titleCol] ?? '';
-    const restricted = restrictCol !== -1 && cols[restrictCol]
-      ? (cols[restrictCol].toLowerCase() === 'true' || cols[restrictCol] === '1')
-      : false;
-    items.push({ videoId, title, ...(restricted ? { restricted: true } : {}) });
+    const restrictedRaw = restrictCol !== -1 ? (cols[restrictCol] ?? '').trim().toLowerCase() : '';
+    const restricted = restrictedRaw === 'true'  || restrictedRaw === '1'  ? true
+                     : restrictedRaw === 'false' || restrictedRaw === '0'  ? false
+                     : null; // empty / absent → unknown/unscanned state
+    items.push({ videoId, title, ...(restricted !== null ? { restricted } : {}) });
   }
 
   return { title: '', fetchedAt: new Date().toISOString(), items };
 }
 
-export function ingestFile(file, failedIds = new Set()) {
+export function ingestFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -238,15 +271,6 @@ export function ingestFile(file, failedIds = new Set()) {
           // Try JSON first, then delimited
           try { data = _parseJson(text); }
           catch { data = _parseSeparated(text); }
-        }
-        // Apply recorded failures
-        if (failedIds.size > 0 && Array.isArray(data.items)) {
-          data = {
-            ...data,
-            items: data.items.map(it =>
-              !it.restricted && failedIds.has(it.videoId) ? { ...it, restricted: true } : it
-            ),
-          };
         }
         if (typeof data.title !== 'string' || !data.title.trim()) {
           data = { ...data, title: fallbackTitle };
@@ -283,12 +307,14 @@ function _toTsv(data) {
   for (const it of data.items ?? []) {
     const id  = String(it.videoId ?? '').replace(/\t/g, ' ');
     const ttl = String(it.title   ?? '').replace(/\t|\n/g, ' ');
-    rows.push(`${id}\t${ttl}\t${it.restricted ? 'true' : 'false'}`);
+    // Three-state: true → 'true', false → 'false', null/undefined → ''
+    const r = it.restricted === true ? 'true' : it.restricted === false ? 'false' : '';
+    rows.push(`${id}\t${ttl}\t${r}`);
   }
   return rows.join('\n');
 }
 
-export async function downloadPlaylist({ url, title, customId, failedIds = new Set(), fetchFn }) {
+export async function downloadPlaylist({ url, title, customId, fetchFn }) {
   let data;
   if (customId) {
     data = getCustomPlaylistById(customId);
@@ -297,16 +323,6 @@ export async function downloadPlaylist({ url, title, customId, failedIds = new S
     try {
       data = await fetchFn(url);
     } catch { alert('Failed to download playlist.'); return; }
-  }
-
-  // Apply recorded failures
-  if (Array.isArray(data.items) && failedIds.size > 0) {
-    data = {
-      ...data,
-      items: data.items.map(it =>
-        !it.restricted && failedIds.has(it.videoId) ? { ...it, restricted: true } : it
-      ),
-    };
   }
 
   // Embed pre-computed counts so playlists.json entries can skip the full-file prefetch

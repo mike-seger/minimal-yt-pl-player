@@ -70,26 +70,30 @@ export function recordFailedId(id) {
 }
 
 // ── Callbacks injected by player.js ──────────────────────────────────────────
-const _cb = { onHideRestrictedChange: null, onPlaylistsChange: null, onOpen: null, startScan: null, cancelScan: null };
+const _cb = { onHideRestrictedChange: null, onPlaylistsChange: null, onOpen: null, startScan: null, cancelScan: null, startScanRestricted: null, clearRestricted: null };
 let _getAllPlaylists = null;
 
 // ── DOM elements (set after DOMContentLoaded via initSettings) ────────────────
-let _overlayEl, _listEl, _failedCountEl, _hideRestrictedCb, _scanBtn, _scanStatus;
+let _overlayEl, _listEl, _failedCountEl, _hideRestrictedCb, _scanBtn, _scanRestrictedBtn, _clearRestrictedBtn, _scanStatus;
 
-export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAllPlaylists, onOpen, startScan, cancelScan }) {
+export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAllPlaylists, onOpen, startScan, cancelScan, startScanRestricted, clearRestricted }) {
   _cb.onHideRestrictedChange = onHideRestrictedChange;
   _cb.onPlaylistsChange      = onPlaylistsChange;
   _cb.onOpen                 = onOpen;
   _cb.startScan              = startScan;
   _cb.cancelScan             = cancelScan;
+  _cb.startScanRestricted    = startScanRestricted;
+  _cb.clearRestricted        = clearRestricted;
   _getAllPlaylists            = getAllPlaylists;
 
-  _overlayEl        = document.getElementById('settings-overlay');
-  _listEl           = document.getElementById('settings-playlist-list');
-  _failedCountEl    = document.getElementById('settings-failed-count');
-  _hideRestrictedCb = document.getElementById('setting-hide-restricted');
-  _scanBtn          = document.getElementById('settings-scan-btn');
-  _scanStatus       = document.getElementById('settings-scan-status');
+  _overlayEl           = document.getElementById('settings-overlay');
+  _listEl              = document.getElementById('settings-playlist-list');
+  _failedCountEl       = document.getElementById('settings-failed-count');
+  _hideRestrictedCb    = document.getElementById('setting-hide-restricted');
+  _scanBtn             = document.getElementById('settings-scan-btn');
+  _scanRestrictedBtn   = document.getElementById('settings-scan-restricted-btn');
+  _clearRestrictedBtn  = document.getElementById('settings-clear-restricted-btn');
+  _scanStatus          = document.getElementById('settings-scan-status');
 
   _hideRestrictedCb.checked = _settings.hideRestricted;
   _hideRestrictedCb.addEventListener('change', () => setHideRestricted(_hideRestrictedCb.checked));
@@ -144,13 +148,45 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
       if (done) {
         _scanning = false;
         _scanBtn.textContent = 'Scan All Tracks';
-        _scanStatus.textContent = `Scan complete — ${found} new failure${found !== 1 ? 's' : ''} found out of ${total} tracks.`;
+        _scanStatus.textContent = `Scan complete — ${found} restricted found out of ${total} unknown track${total !== 1 ? 's' : ''}.`;
         _renderFailedSection();
         return;
       }
       const label = title ? ` · ${title.length > 38 ? title.slice(0, 36) + '…' : title}` : '';
-      _scanStatus.textContent = `Scanning ${scanned}/${total} · ${found} new failure${found !== 1 ? 's' : ''}${label}`;
+      _scanStatus.textContent = `Scanning ${scanned}/${total} · ${found} restricted${label}`;
     });
+  });
+
+  let _scanningRestricted = false;
+  _scanRestrictedBtn.addEventListener('click', () => {
+    if (_scanningRestricted) {
+      _cb.cancelScan?.();
+      _scanningRestricted = false;
+      _scanRestrictedBtn.textContent = 'Scan Restricted';
+      _scanStatus.hidden = false;
+      _scanStatus.textContent = 'Re-scan stopped.';
+      return;
+    }
+    _scanningRestricted = true;
+    _scanRestrictedBtn.textContent = 'Stop Scan';
+    _scanStatus.hidden = false;
+    _scanStatus.textContent = 'Re-scanning restricted tracks…';
+    _cb.startScanRestricted?.(({ scanned, total, found, title, done }) => {
+      if (done) {
+        _scanningRestricted = false;
+        _scanRestrictedBtn.textContent = 'Scan Restricted';
+        _scanStatus.textContent = `Re-scan complete — ${found} track${found !== 1 ? 's' : ''} unblocked out of ${total} checked.`;
+        return;
+      }
+      const label = title ? ` · ${title.length > 38 ? title.slice(0, 36) + '…' : title}` : '';
+      _scanStatus.textContent = `Re-scanning ${scanned}/${total} · ${found} unblocked${label}`;
+    });
+  });
+
+  _clearRestrictedBtn.addEventListener('click', () => {
+    _cb.clearRestricted?.();
+    _scanStatus.hidden = false;
+    _scanStatus.textContent = 'All track states reset to unknown.';
   });
 
   // File drop / click-to-upload
@@ -242,7 +278,6 @@ function _renderPlaylistSection() {
         url,
         title,
         customId: isCustom ? id : null,
-        failedIds: _failedIds,
         fetchFn: async (u) => {
           const r = await fetch(u, { cache: 'no-store' });
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -265,7 +300,7 @@ function _renderFailedSection() {
 
 async function _handleFileUpload(file) {
   try {
-    await ingestFile(file, _failedIds);
+    await ingestFile(file);
     _cb.onPlaylistsChange?.();
     _renderPlaylistSection();
   } catch (err) {

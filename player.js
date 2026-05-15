@@ -7,6 +7,7 @@ import {
   getCustomPlaylists, getCustomPlaylistById,
   getPlaylistState, savePlaylistState,
   initCustomPlaylists,
+  getRestrictedOverrides, saveRestrictedOverride, clearRestrictedOverrides,
 } from './playlist.js';
 
 // ── Rendering thresholds ──────────────────────────────────────────────────────
@@ -14,7 +15,13 @@ import {
 // At or above it we switch to virtual scrolling. Increase if you want full DOM at larger sizes.
 const FULL_RENDER_THRESHOLD = 5_000;
 const VSCROLL_ITEM_H = 52; // px — must match --track-item-height in style.css
-
+// ── Scanner constants ──────────────────────────────────────────────────────────────────────
+const SCAN_TIMEOUT_MS       = 8000;  // raised from 6 s
+const SCAN_RETRIES          = 2;     // extra attempts for transient errors
+const SCAN_RETRY_DELAY_MS   = 2500;
+const SCAN_INTER_TRACK_MS   = 300;   // polite gap between tracks
+// YT error codes that are permanent (no point retrying):
+const PERMANENT_YT_ERRORS   = new Set([100, 101, 150]);
 // ── Resume persistence ────────────────────────────────────────────────────────
 // Global resume only stores last active playlistUrl; per-playlist state is in playlist.js
 const RESUME_KEY = 'yt-pl-player.resume.v1';
@@ -55,6 +62,7 @@ let activeFilter = '';    // current filter string for the active playlist
 let _scanActive = false;
 let _scanCurrentItem = null;  // item being tested during scan
 let _scanResolveTrack = null; // resolves the per-track promise
+let _scanNonce = 0;           // incremented each slot; stale YT events carry the wrong nonce and are ignored
 
 // Virtual-scroll state
 let _vsItems = [];            // current post-filter [{ item, idx }] array in virtual mode
@@ -128,30 +136,31 @@ window.onYouTubeIframeAPIReady = function () {
           // Only PLAYING(1) means the video is genuinely accessible.
           // BUFFERING(3) fires for restricted videos too (before onError),
           // so we must not resolve on it.
-          if (e.data === 1) _scanResolveTrack('ok');
+          if (e.data === 1) _scanResolveTrack('ok', _scanNonce);
           return;
         }
         if (e.data === YT.PlayerState.ENDED && currentIndex < items.length - 1) playIndex(currentIndex + 1, 0, 1);
       },
       onError(e) {
         if (_scanActive && _scanResolveTrack) {
-          // Record failure and let the scan loop handle advancing
-          const errItem = _scanCurrentItem;
-          const errId = errItem?.videoId;
+          // Forward the error code so _testOneTrack can decide whether to retry.
+          // Do NOT mark the item here — that happens after all retries are exhausted.
+          const errId = _scanCurrentItem?.videoId;
           console.warn(`[scan] YT error ${e.data} videoId=${errId ?? '?'}`);
-          if (errItem) errItem.restricted = true;
-          recordFailedId(errId);
-          renderTrackList();
-          _scanResolveTrack('fail');
+          _scanResolveTrack('fail', _scanNonce, e.data);
           return;
         }
         const errItem = items[currentIndex];
         const errId = errItem?.videoId;
         console.warn(`YT error ${e.data} videoId=${errId ?? '?'} title=${JSON.stringify(errItem?.title ?? '')}`);
-        // Mark this track restricted so it is skipped and dimmed going forward
-        if (items[currentIndex]) items[currentIndex].restricted = true;
-        recordFailedId(errId);
-        renderTrackList();
+        // Only mark permanently restricted for definitive error codes; code 5 is transient
+        if (errItem && PERMANENT_YT_ERRORS.has(e.data)) {
+          errItem.restricted = true;
+          recordFailedId(errId);
+          _persistRestricted(errId, true);
+          renderTrackList();
+          _refreshTrackCounts();
+        }
         if (currentIndex < items.length - 1) setTimeout(() => playIndex(currentIndex + 1, 0, 1), 1500);
       },
     },
@@ -165,41 +174,81 @@ function loadYTScript() {
 }
 
 // ── Track scanner ────────────────────────────────────────────────────────────
-const SCAN_TIMEOUT_MS = 6000;
 
-async function scanAllTracks(onProgress) {
-  if (_scanActive || !ytReady || !ytPlayer) return;
-  _scanActive = true;
-  let found = 0;
-  const total = items.filter(it => !it.restricted && it.videoId).length;
-  let scanned = 0;
+function _persistRestricted(videoId, value) {
+  if (!activePlaylistUrl || !videoId) return;
+  saveRestrictedOverride(activePlaylistUrl, videoId, value);
+  const item = items.find(it => it.videoId === videoId);
+  if (item) item.restricted = value;
+}
 
-  for (let idx = 0; idx < items.length; idx++) {
-    if (!_scanActive) break;
-    const item = items[idx];
-    if (item.restricted || !item.videoId) continue;
+function _refreshTrackCounts() {
+  const entry = allPlaylists.find(p => p.url === activePlaylistUrl);
+  if (!entry) return;
+  entry.playableCount   = items.filter(it => it.restricted !== true).length;
+  entry.restrictedCount = items.filter(it => it.restricted === true).length;
+}
 
-    scanned++;
-    onProgress({ scanned, total, found, title: item.title, done: false });
+// Tests one track; returns 'ok' | 'fail' | 'cancelled'.
+// Retries up to SCAN_RETRIES times for transient (non-permanent) errors.
+async function _testOneTrack(item) {
+  for (let attempt = 0; attempt <= SCAN_RETRIES; attempt++) {
+    if (!_scanActive) return 'cancelled';
+    if (attempt > 0) await new Promise(r => setTimeout(r, SCAN_RETRY_DELAY_MS));
+    if (!_scanActive) return 'cancelled';
 
-    const result = await new Promise(resolve => {
+    const { outcome, errCode } = await new Promise(resolve => {
+      const myNonce = ++_scanNonce;
+
       const timer = setTimeout(() => {
+        if (_scanNonce !== myNonce) return;
         _scanResolveTrack = null;
-        resolve('ok');
+        resolve({ outcome: 'ok', errCode: null }); // timeout → assume accessible
       }, SCAN_TIMEOUT_MS);
 
       _scanCurrentItem = item;
-      _scanResolveTrack = (outcome) => {
+      _scanResolveTrack = (outcome, nonce, errCode) => {
+        if (nonce !== myNonce) return;
         clearTimeout(timer);
         _scanCurrentItem = null;
         _scanResolveTrack = null;
-        resolve(outcome);
+        resolve({ outcome, errCode });
       };
 
       ytPlayer.loadVideoById({ videoId: item.videoId, startSeconds: 0 });
     });
 
-    if (result === 'fail') found++;
+    if (outcome === 'ok') return 'ok';
+    if (PERMANENT_YT_ERRORS.has(errCode)) return 'fail'; // no retry for permanent errors
+    // transient — loop for next attempt
+  }
+  return 'fail';
+}
+
+async function scanAllTracks(onProgress) {
+  if (_scanActive || !ytReady || !ytPlayer) return;
+  _scanActive = true;
+  let found = 0;
+  const candidates = items.filter(it => it.restricted == null && it.videoId);
+  const total = candidates.length;
+  let scanned = 0;
+
+  for (const item of candidates) {
+    if (!_scanActive) break;
+    scanned++;
+    onProgress({ scanned, total, found, title: item.title, done: false });
+
+    const result = await _testOneTrack(item);
+    if (result === 'fail') {
+      found++;
+      _persistRestricted(item.videoId, true);
+      renderTrackList();
+      _refreshTrackCounts();
+    } else if (result === 'ok') {
+      _persistRestricted(item.videoId, false);
+    }
+
+    if (_scanActive) await new Promise(r => setTimeout(r, SCAN_INTER_TRACK_MS));
   }
 
   _scanActive = false;
@@ -208,10 +257,48 @@ async function scanAllTracks(onProgress) {
   onProgress({ scanned: total, total, found, title: '', done: true });
 }
 
+async function scanRestrictedTracks(onProgress) {
+  if (_scanActive || !ytReady || !ytPlayer) return;
+  _scanActive = true;
+  let unblocked = 0;
+  const candidates = items.filter(it => it.restricted === true && it.videoId);
+  const total = candidates.length;
+  let scanned = 0;
+
+  for (const item of candidates) {
+    if (!_scanActive) break;
+    scanned++;
+    onProgress({ scanned, total, unblocked, title: item.title, done: false });
+
+    const result = await _testOneTrack(item);
+    if (result === 'ok') {
+      unblocked++;
+      _persistRestricted(item.videoId, false);
+      renderTrackList();
+      _refreshTrackCounts();
+    }
+
+    if (_scanActive) await new Promise(r => setTimeout(r, SCAN_INTER_TRACK_MS));
+  }
+
+  _scanActive = false;
+  _scanCurrentItem = null;
+  _scanResolveTrack = null;
+  onProgress({ scanned: total, total, unblocked, title: '', done: true });
+}
+
+function clearRestrictedState() {
+  if (!activePlaylistUrl) return;
+  clearRestrictedOverrides(activePlaylistUrl);
+  items.forEach(it => { delete it.restricted; });
+  renderTrackList();
+  _refreshTrackCounts();
+}
+
 function cancelScan() {
   if (!_scanActive) return;
   _scanActive = false;
-  if (_scanResolveTrack) _scanResolveTrack('ok');
+  if (_scanResolveTrack) _scanResolveTrack('ok', _scanNonce);
 }
 
 // ── Resume save loop ──────────────────────────────────────────────────────────
@@ -283,6 +370,18 @@ async function switchPlaylist(url, restoreResume = false) {
 
   activePlaylistUrl = url;
   items = Array.isArray(playlist.items) ? playlist.items : [];
+
+  // Apply per-playlist restricted overrides (stored locally, independent per playlist URL)
+  const overrides = getRestrictedOverrides(activePlaylistUrl);
+  const overrideKeys = Object.keys(overrides);
+  if (overrideKeys.length > 0) {
+    items = items.map(item =>
+      item.videoId && item.videoId in overrides
+        ? { ...item, restricted: overrides[item.videoId] }
+        : item
+    );
+  }
+
   const rawTitle = (typeof playlist.title === 'string' && playlist.title.trim()) || 'Playlist';
   const title = getPlaylistNameOverride(url) ?? rawTitle;
   const playableCount   = items.filter(it => !it.restricted).length;
@@ -412,6 +511,8 @@ async function loadPlaylist() {
     onOpen:                closePicker,
     startScan:             (onProgress) => scanAllTracks(onProgress),
     cancelScan:            cancelScan,
+    startScanRestricted:   (onProgress) => scanRestrictedTracks(onProgress),
+    clearRestricted:       clearRestrictedState,
   });
 
   // Start with saved playlist (if still available and not hidden), else first non-hidden

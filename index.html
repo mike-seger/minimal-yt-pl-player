@@ -52,14 +52,22 @@
         </section>
 
         <section class="settings-section">
+          <div class="settings-section-title">Track scanning</div>
+          <div class="settings-scan-row">
+            <button class="settings-btn" id="settings-scan-btn">Scan All Tracks</button>
+            <button class="settings-btn" id="settings-scan-restricted-btn">Scan Restricted</button>
+            <button class="settings-btn" id="settings-clear-restricted-btn">Clear All</button>
+          </div>
+          <div id="settings-scan-status" class="settings-muted" hidden></div>
+        </section>
+
+        <section class="settings-section">
           <div class="settings-section-title">Failed video IDs</div>
           <div id="settings-failed-count" class="settings-muted">No failed videos recorded.</div>
           <div class="settings-scan-row">
-            <button class="settings-btn" id="settings-scan-btn">Scan All Tracks</button>
             <button class="settings-btn" id="settings-copy-failed">Copy to clipboard</button>
             <button class="settings-btn" id="settings-clear-failed">Clear</button>
           </div>
-          <div id="settings-scan-status" class="settings-muted" hidden></div>
         </section>
 
       </div>
