@@ -1,6 +1,6 @@
 import {
   isHideRestricted, getHiddenPlaylists,
-  initSettings, recordFailedId,
+  initSettings, updateScanButtons, recordFailedId,
   getPlaylistNameOverride,
 } from './settings.js';
 import {
@@ -57,12 +57,14 @@ let ytReady = false;
 let pendingLoad = null;   // { videoId, positionSec } to apply once the player is ready
 let resumeSaveTimer = null;
 let activeFilter = '';    // current filter string for the active playlist
+let activeYearFilter = new Set(); // selected years; empty = show all
 
 // Scan state (separate from normal playback)
 let _scanActive = false;
 let _scanCurrentItem = null;  // item being tested during scan
 let _scanResolveTrack = null; // resolves the per-track promise
 let _scanNonce = 0;           // incremented each slot; stale YT events carry the wrong nonce and are ignored
+let _scanWasMuted = false;    // whether the player was already muted before a scan started
 
 // Virtual-scroll state
 let _vsItems = [];            // current post-filter [{ item, idx }] array in virtual mode
@@ -79,6 +81,8 @@ const btnNext            = document.getElementById('btn-next');
 const pickerEl           = document.getElementById('playlist-picker');
 const pickerDropdownEl   = document.getElementById('playlist-picker-dropdown');
 const filterInputEl      = document.getElementById('track-filter');
+const yearFilterBtnEl    = document.getElementById('year-filter-btn');
+const yearFilterDropEl   = document.getElementById('year-filter-dropdown');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function escapeHtml(s) {
@@ -139,7 +143,10 @@ window.onYouTubeIframeAPIReady = function () {
           if (e.data === 1) _scanResolveTrack('ok', _scanNonce);
           return;
         }
-        if (e.data === YT.PlayerState.ENDED && currentIndex < items.length - 1) playIndex(currentIndex + 1, 0, 1);
+        if (e.data === YT.PlayerState.ENDED) {
+          const nextIdx = _nextVisibleIdx(currentIndex, 1);
+          if (nextIdx >= 0) playIndex(nextIdx, 0, 1);
+        }
       },
       onError(e) {
         if (_scanActive && _scanResolveTrack) {
@@ -161,7 +168,10 @@ window.onYouTubeIframeAPIReady = function () {
           renderTrackList();
           _refreshTrackCounts();
         }
-        if (currentIndex < items.length - 1) setTimeout(() => playIndex(currentIndex + 1, 0, 1), 1500);
+        if (currentIndex < items.length - 1) setTimeout(() => {
+          const nextIdx = _nextVisibleIdx(currentIndex, 1);
+          if (nextIdx >= 0) playIndex(nextIdx, 0, 1);
+        }, 1500);
       },
     },
   });
@@ -225,9 +235,34 @@ async function _testOneTrack(item) {
   return 'fail';
 }
 
+function _scanMute()   { _scanWasMuted = ytPlayer.isMuted(); if (!_scanWasMuted) ytPlayer.mute(); }
+function _scanUnmute() { if (!_scanWasMuted) ytPlayer.unMute(); }
+
+function _scrollToScanItem(item) {
+  if (!document.getElementById('settings-overlay')?.hidden) return;
+  const itemIdx = items.indexOf(item);
+  if (itemIdx < 0) return;
+  if (_vsScrollHandler) {
+    const di = _vsItems.findIndex(v => v.idx === itemIdx);
+    if (di < 0) return;
+    const top = di * VSCROLL_ITEM_H;
+    const bot = top + VSCROLL_ITEM_H;
+    const st  = trackListEl.scrollTop;
+    const ch  = trackListEl.clientHeight;
+    if (bot > st + ch || top < st) {
+      trackListEl.scrollTo({ top, behavior: 'smooth' });
+      _renderVSlice();
+    }
+  } else {
+    const el = trackListEl.querySelector(`.track-item[data-idx="${itemIdx}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
 async function scanAllTracks(onProgress) {
   if (_scanActive || !ytReady || !ytPlayer) return;
   _scanActive = true;
+  _scanMute();
   let found = 0;
   const candidates = items.filter(it => it.restricted == null && it.videoId);
   const total = candidates.length;
@@ -237,6 +272,7 @@ async function scanAllTracks(onProgress) {
     if (!_scanActive) break;
     scanned++;
     onProgress({ scanned, total, found, title: item.title, done: false });
+    _scrollToScanItem(item);
 
     const result = await _testOneTrack(item);
     if (result === 'fail') {
@@ -254,12 +290,14 @@ async function scanAllTracks(onProgress) {
   _scanActive = false;
   _scanCurrentItem = null;
   _scanResolveTrack = null;
+  _scanUnmute();
   onProgress({ scanned: total, total, found, title: '', done: true });
 }
 
 async function scanRestrictedTracks(onProgress) {
   if (_scanActive || !ytReady || !ytPlayer) return;
   _scanActive = true;
+  _scanMute();
   let unblocked = 0;
   const candidates = items.filter(it => it.restricted === true && it.videoId);
   const total = candidates.length;
@@ -269,6 +307,7 @@ async function scanRestrictedTracks(onProgress) {
     if (!_scanActive) break;
     scanned++;
     onProgress({ scanned, total, unblocked, title: item.title, done: false });
+    _scrollToScanItem(item);
 
     const result = await _testOneTrack(item);
     if (result === 'ok') {
@@ -284,6 +323,7 @@ async function scanRestrictedTracks(onProgress) {
   _scanActive = false;
   _scanCurrentItem = null;
   _scanResolveTrack = null;
+  _scanUnmute();
   onProgress({ scanned: total, total, unblocked, title: '', done: true });
 }
 
@@ -293,11 +333,13 @@ function clearRestrictedState() {
   items.forEach(it => { delete it.restricted; });
   renderTrackList();
   _refreshTrackCounts();
+  updateScanButtons();
 }
 
 function cancelScan() {
   if (!_scanActive) return;
   _scanActive = false;
+  _scanUnmute();
   if (_scanResolveTrack) _scanResolveTrack('ok', _scanNonce);
 }
 
@@ -397,10 +439,13 @@ async function switchPlaylist(url, restoreResume = false) {
   const plState = getPlaylistState(url);
   activeFilter = plState.filter ?? '';
   filterInputEl.value = activeFilter;
+  activeYearFilter = new Set();
+  _populateYearFilter();
 
   currentIndex = -1;
   renderTrackList();
   renderPickerDropdown();
+  updateScanButtons();
   statusOverlay.classList.add('hidden');
 
   if (!items.length) return;
@@ -513,6 +558,7 @@ async function loadPlaylist() {
     cancelScan:            cancelScan,
     startScanRestricted:   (onProgress) => scanRestrictedTracks(onProgress),
     clearRestricted:       clearRestrictedState,
+    getUnknownCount:       () => items.filter(it => it.restricted == null && it.videoId).length,
   });
 
   // Start with saved playlist (if still available and not hidden), else first non-hidden
@@ -531,7 +577,56 @@ async function loadPlaylist() {
 }
 
 // ── Filter helpers ────────────────────────────────────────────────────────────
+function _populateYearFilter() {
+  const years = [...new Set(items.map(it => it.year).filter(y => y != null))]
+    .sort((a, b) => String(b).localeCompare(String(a), undefined, { numeric: true }));
+  yearFilterDropEl.innerHTML = '';
+  if (!years.length) {
+    yearFilterBtnEl.style.display = 'none';
+    return;
+  }
+  yearFilterBtnEl.style.display = '';
+  for (const year of years) {
+    const y = String(year);
+    const opt = document.createElement('div');
+    opt.className = 'year-option' + (activeYearFilter.has(y) ? ' selected' : '');
+    opt.textContent = y;
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (activeYearFilter.has(y)) activeYearFilter.delete(y);
+      else activeYearFilter.add(y);
+      opt.classList.toggle('selected', activeYearFilter.has(y));
+      _updateYearFilterBtn();
+      renderTrackList();
+    });
+    yearFilterDropEl.appendChild(opt);
+  }
+  _updateYearFilterBtn();
+}
+
+function _updateYearFilterBtn() {
+  if (activeYearFilter.size > 0) {
+    yearFilterBtnEl.textContent = `Year (${activeYearFilter.size})`;
+    yearFilterBtnEl.classList.add('active');
+  } else {
+    yearFilterBtnEl.textContent = 'Year';
+    yearFilterBtnEl.classList.remove('active');
+  }
+}
+
+yearFilterBtnEl.addEventListener('click', (e) => {
+  e.stopPropagation();
+  yearFilterDropEl.hidden = !yearFilterDropEl.hidden;
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#year-filter')) yearFilterDropEl.hidden = true;
+});
+
 function matchesFilter(item) {
+  if (activeYearFilter.size > 0) {
+    const y = item.year != null ? String(item.year) : '';
+    if (!activeYearFilter.has(y)) return false;
+  }
   if (!activeFilter || activeFilter.length < 2) return true;
   const haystack = (item.title || item.videoId || '').toLowerCase();
   return activeFilter.toLowerCase().split(/\s+/).filter(Boolean).every(tok => haystack.includes(tok));
@@ -550,6 +645,21 @@ function _buildVisibleItems() {
     result.push({ item, idx, displayNum });
   });
   return result;
+}
+
+// Returns the next raw items[] index from fromIdx in direction dir (+1/-1),
+// staying within the currently visible (filtered) items. Returns -1 at boundaries.
+function _nextVisibleIdx(fromIdx, dir) {
+  const visible = _buildVisibleItems();
+  if (!visible.length) return -1;
+  const pos = visible.findIndex(v => v.idx === fromIdx);
+  if (pos === -1) {
+    // current track not in filtered view — snap to start/end of visible list
+    return dir > 0 ? visible[0].idx : visible[visible.length - 1].idx;
+  }
+  const next = pos + dir;
+  if (next < 0 || next >= visible.length) return -1;
+  return visible[next].idx;
 }
 
 // ── Track item DOM builder (shared by both renderers) ─────────────────────────
@@ -579,7 +689,10 @@ function _makeTrackEl({ item, idx, displayNum }) {
     <span class="track-num">${displayNum}</span>
     ${thumb ? `<img class="track-thumb" src="${escapeAttr(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
     <div class="track-info">
-      <div class="track-title">${escapeHtml(artist || song)}</div>
+      <div class="track-row1">
+        <div class="track-title">${escapeHtml(artist || song)}</div>
+        ${item.year != null ? `<span class="track-year">${escapeHtml(String(item.year))}</span>` : ''}
+      </div>
       ${artist ? `<div class="track-subtitle">${escapeHtml(song)}</div>` : ''}
     </div>`;
 
@@ -781,14 +894,19 @@ function playIndex(idx, positionSec = 0, dir = 0) {
   if (item?.restricted) {
     // Infer direction from caller if not supplied, default forward
     const step = dir !== 0 ? dir : 1;
-    playIndex(idx + step, 0, step);
+    const nextIdx = _nextVisibleIdx(idx, step);
+    if (nextIdx >= 0) playIndex(nextIdx, 0, step);
     return;
   }
 
   currentIndex = idx;
   syncActiveTrack(dir);
   const videoId = item?.videoId ? String(item.videoId) : '';
-  if (!videoId) { playIndex(idx + 1); return; }
+  if (!videoId) {
+    const nextIdx = _nextVisibleIdx(idx, 1);
+    if (nextIdx >= 0) playIndex(nextIdx);
+    return;
+  }
 
   saveResume(currentIndex, 0);
 
@@ -814,11 +932,11 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'ArrowUp':
       e.preventDefault();
-      if (currentIndex > 0) playIndex(currentIndex - 1, 0, -1);
+      { const ni = _nextVisibleIdx(currentIndex, -1); if (ni >= 0) playIndex(ni, 0, -1); }
       break;
     case 'ArrowDown':
       e.preventDefault();
-      if (currentIndex < items.length - 1) playIndex(currentIndex + 1, 0, 1);
+      { const ni = _nextVisibleIdx(currentIndex, 1); if (ni >= 0) playIndex(ni, 0, 1); }
       break;
     case 'ArrowLeft':
       if (e.altKey) break;
@@ -834,8 +952,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Button controls ───────────────────────────────────────────────────────────
-btnPrev.addEventListener('click', () => { if (currentIndex > 0) playIndex(currentIndex - 1, 0, -1); });
-btnNext.addEventListener('click', () => { if (currentIndex < items.length - 1) playIndex(currentIndex + 1, 0, 1); });
+btnPrev.addEventListener('click', () => { const ni = _nextVisibleIdx(currentIndex, -1); if (ni >= 0) playIndex(ni, 0, -1); });
+btnNext.addEventListener('click', () => { const ni = _nextVisibleIdx(currentIndex,  1); if (ni >= 0) playIndex(ni, 0,  1); });
 
 // ── Swipe gestures ────────────────────────────────────────────────────────────
 const SWIPE_MIN_X = 40;

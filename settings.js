@@ -70,13 +70,13 @@ export function recordFailedId(id) {
 }
 
 // ── Callbacks injected by player.js ──────────────────────────────────────────
-const _cb = { onHideRestrictedChange: null, onPlaylistsChange: null, onOpen: null, startScan: null, cancelScan: null, startScanRestricted: null, clearRestricted: null };
+const _cb = { onHideRestrictedChange: null, onPlaylistsChange: null, onOpen: null, startScan: null, cancelScan: null, startScanRestricted: null, clearRestricted: null, getUnknownCount: null };
 let _getAllPlaylists = null;
 
 // ── DOM elements (set after DOMContentLoaded via initSettings) ────────────────
 let _overlayEl, _listEl, _failedCountEl, _hideRestrictedCb, _scanBtn, _scanRestrictedBtn, _clearRestrictedBtn, _scanStatus;
 
-export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAllPlaylists, onOpen, startScan, cancelScan, startScanRestricted, clearRestricted }) {
+export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAllPlaylists, onOpen, startScan, cancelScan, startScanRestricted, clearRestricted, getUnknownCount }) {
   _cb.onHideRestrictedChange = onHideRestrictedChange;
   _cb.onPlaylistsChange      = onPlaylistsChange;
   _cb.onOpen                 = onOpen;
@@ -84,6 +84,7 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
   _cb.cancelScan             = cancelScan;
   _cb.startScanRestricted    = startScanRestricted;
   _cb.clearRestricted        = clearRestricted;
+  _cb.getUnknownCount        = getUnknownCount;
   _getAllPlaylists            = getAllPlaylists;
 
   _overlayEl           = document.getElementById('settings-overlay');
@@ -131,33 +132,37 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
   });
 
   let _scanning = false;
+  let _scanStartMs = 0;
   _scanBtn.addEventListener('click', () => {
     if (_scanning) {
       _cb.cancelScan?.();
       _scanning = false;
-      _scanBtn.textContent = 'Scan All Tracks';
+      _updateScanAllLabel();
       _scanStatus.hidden = false;
       _scanStatus.textContent = 'Scan stopped.';
       return;
     }
     _scanning = true;
-    _scanBtn.textContent = 'Stop Scan';
+    _scanStartMs = Date.now();
+    _scanBtn.textContent = 'Stop Scanning Tracks';
     _scanStatus.hidden = false;
     _scanStatus.textContent = 'Starting scan…';
     _cb.startScan?.(({ scanned, total, found, title, done }) => {
       if (done) {
         _scanning = false;
-        _scanBtn.textContent = 'Scan All Tracks';
+        _updateScanAllLabel();
         _scanStatus.textContent = `Scan complete — ${found} restricted found out of ${total} unknown track${total !== 1 ? 's' : ''}.`;
         _renderFailedSection();
         return;
       }
-      const label = title ? ` · ${title.length > 38 ? title.slice(0, 36) + '…' : title}` : '';
-      _scanStatus.textContent = `Scanning ${scanned}/${total} · ${found} restricted${label}`;
+      const eta = _fmtEta(_scanStartMs, scanned, total);
+      const etaPart = eta ? ` · ETA ${eta}` : '';
+      _scanStatus.textContent = `${scanned} / ${total} scanned · ${found} restricted${etaPart}`;
     });
   });
 
   let _scanningRestricted = false;
+  let _scanRestrictedStartMs = 0;
   _scanRestrictedBtn.addEventListener('click', () => {
     if (_scanningRestricted) {
       _cb.cancelScan?.();
@@ -168,18 +173,20 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
       return;
     }
     _scanningRestricted = true;
-    _scanRestrictedBtn.textContent = 'Stop Scan';
+    _scanRestrictedStartMs = Date.now();
+    _scanRestrictedBtn.textContent = 'Stop Scanning Restricted';
     _scanStatus.hidden = false;
     _scanStatus.textContent = 'Re-scanning restricted tracks…';
-    _cb.startScanRestricted?.(({ scanned, total, found, title, done }) => {
+    _cb.startScanRestricted?.(({ scanned, total, unblocked, title, done }) => {
       if (done) {
         _scanningRestricted = false;
         _scanRestrictedBtn.textContent = 'Scan Restricted';
-        _scanStatus.textContent = `Re-scan complete — ${found} track${found !== 1 ? 's' : ''} unblocked out of ${total} checked.`;
+        _scanStatus.textContent = `Re-scan complete — ${unblocked} track${unblocked !== 1 ? 's' : ''} now playable out of ${total} checked.`;
         return;
       }
-      const label = title ? ` · ${title.length > 38 ? title.slice(0, 36) + '…' : title}` : '';
-      _scanStatus.textContent = `Re-scanning ${scanned}/${total} · ${found} unblocked${label}`;
+      const eta = _fmtEta(_scanRestrictedStartMs, scanned, total);
+      const etaPart = eta ? ` · ETA ${eta}` : '';
+      _scanStatus.textContent = `${scanned} / ${total} re-scanned · ${unblocked} now playable${etaPart}`;
     });
   });
 
@@ -206,8 +213,27 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
   });
 }
 
+function _fmtEta(startMs, scanned, total) {
+  if (scanned <= 0 || total <= scanned) return '';
+  const remaining = (total - scanned) * ((Date.now() - startMs) / scanned);
+  const eta = new Date(Date.now() + remaining);
+  const p = n => String(n).padStart(2, '0');
+  return `${eta.getFullYear()}-${p(eta.getMonth() + 1)}-${p(eta.getDate())} ${p(eta.getHours())}:${p(eta.getMinutes())}`;
+}
+
+function _updateScanAllLabel() {
+  if (!_scanBtn) return;
+  const n = _cb.getUnknownCount?.() ?? '?';
+  _scanBtn.textContent = `Scan ${n} Tracks`;
+}
+
+export function updateScanButtons() {
+  _updateScanAllLabel();
+}
+
 export function openSettings() {
   _cb.onOpen?.();
+  _updateScanAllLabel();
   _renderPlaylistSection();
   _renderFailedSection();
   _overlayEl.hidden = false;

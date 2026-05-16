@@ -342,13 +342,15 @@ html, body {
 .settings-scan-row .settings-btn { flex: 1; }
 
 #track-filter-wrap {
+    display: flex;
+    align-items: stretch;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
 }
 
 #track-filter {
-    display: block;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     background: var(--bg);
     border: none;
     border-radius: 0;
@@ -363,6 +365,54 @@ html, body {
 #track-filter:focus { border-color: var(--accent); }
 /* Hide native clear button in webkit */
 #track-filter::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+#year-filter {
+    position: relative;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border);
+}
+
+#year-filter-btn {
+    height: 100%;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 0 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.12s, color 0.12s;
+}
+#year-filter-btn:hover,
+#year-filter-btn.active { background: var(--hover-bg); color: var(--text); }
+#year-filter-btn.active { color: var(--accent); }
+
+#year-filter-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 90px;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 15;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+}
+
+.year-option {
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background 0.1s;
+    white-space: nowrap;
+}
+.year-option:hover { background: var(--hover-bg); color: var(--text); }
+.year-option.selected { color: var(--accent); font-weight: 500; }
+.year-option.selected::before { content: '✓\00a0'; }
 
 .settings-pl-rename {
     width: 100%;
@@ -432,12 +482,32 @@ html, body {
     min-width: 0;
 }
 
+.track-row1 {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
 .track-title {
+    flex: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 13px;
     color: var(--text);
+}
+
+.track-year {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    padding: 1px 5px;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
 }
 
 .track-item.active .track-title { color: var(--accent); font-weight: 500; }
