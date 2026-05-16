@@ -168,6 +168,7 @@ export function addCustomPlaylist(data) {
           if (it.restricted === true)  item.restricted = true;
           else if (it.restricted === false) item.restricted = false;
           // null / undefined → omit the property (unknown/unscanned state)
+          if (it.year != null) item.year = it.year;
           return item;
         })
       : [],
@@ -196,7 +197,7 @@ function _parseJson(text) {
   return data;
 }
 
-// Parse CSV or TSV with required header: videoId, title, restricted
+// Parse CSV or TSV with required columns: videoId, title — optional: year, restricted
 function _parseSeparated(text) {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   if (!lines.length) throw new Error('Empty file.');
@@ -232,6 +233,7 @@ function _parseSeparated(text) {
   const videoIdCol  = headers.indexOf('videoId');
   const titleCol    = headers.indexOf('title');
   const restrictCol = headers.indexOf('restricted');
+  const yearCol     = headers.indexOf('year');
   if (videoIdCol === -1) throw new Error('Missing required column: videoId');
   if (titleCol    === -1) throw new Error('Missing required column: title');
 
@@ -247,7 +249,9 @@ function _parseSeparated(text) {
     const restricted = restrictedRaw === 'true'  || restrictedRaw === '1'  ? true
                      : restrictedRaw === 'false' || restrictedRaw === '0'  ? false
                      : null; // empty / absent → unknown/unscanned state
-    items.push({ videoId, title, ...(restricted !== null ? { restricted } : {}) });
+    const yearRaw = yearCol !== -1 ? (cols[yearCol] ?? '').trim() : '';
+    const year = yearRaw !== '' ? (isNaN(yearRaw) ? yearRaw : Number(yearRaw)) : null;
+    items.push({ videoId, title, ...(restricted !== null ? { restricted } : {}), ...(year !== null ? { year } : {}) });
   }
 
   return { title: '', fetchedAt: new Date().toISOString(), items };
@@ -303,13 +307,14 @@ async function _getJSZip() {
 }
 
 function _toTsv(data) {
-  const rows = ['videoId\ttitle\trestricted'];
+  const rows = ['videoId\ttitle\tyear\trestricted'];
   for (const it of data.items ?? []) {
     const id  = String(it.videoId ?? '').replace(/\t/g, ' ');
     const ttl = String(it.title   ?? '').replace(/\t|\n/g, ' ');
+    const yr  = it.year != null ? String(it.year).replace(/\t/g, ' ') : '';
     // Three-state: true → 'true', false → 'false', null/undefined → ''
     const r = it.restricted === true ? 'true' : it.restricted === false ? 'false' : '';
-    rows.push(`${id}\t${ttl}\t${r}`);
+    rows.push(`${id}\t${ttl}\t${yr}\t${r}`);
   }
   return rows.join('\n');
 }
@@ -323,6 +328,22 @@ export async function downloadPlaylist({ url, title, customId, fetchFn }) {
     try {
       data = await fetchFn(url);
     } catch { alert('Failed to download playlist.'); return; }
+  }
+
+  // Merge scan results (restricted overrides) into items before export
+  if (Array.isArray(data.items)) {
+    const overrides = getRestrictedOverrides(url);
+    if (Object.keys(overrides).length > 0) {
+      data = {
+        ...data,
+        items: data.items.map(it => {
+          const ov = overrides[it.videoId];
+          if (ov === undefined) return it;
+          if (ov === null) { const { restricted: _, ...rest } = it; return rest; }
+          return { ...it, restricted: ov };
+        }),
+      };
+    }
   }
 
   // Embed pre-computed counts so playlists.json entries can skip the full-file prefetch

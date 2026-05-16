@@ -62,9 +62,11 @@ let activeYearFilter = new Set(); // selected years; empty = show all
 // Scan state (separate from normal playback)
 let _scanActive = false;
 let _scanCurrentItem = null;  // item being tested during scan
+let _scanningIdx = -1;        // items[] index of the track currently being scanned (for UI highlight)
 let _scanResolveTrack = null; // resolves the per-track promise
 let _scanNonce = 0;           // incremented each slot; stale YT events carry the wrong nonce and are ignored
 let _scanWasMuted = false;    // whether the player was already muted before a scan started
+let _scanResumeState = null;  // { videoId, positionSec } of the track playing before scan started
 
 // Virtual-scroll state
 let _vsItems = [];            // current post-filter [{ item, idx }] array in virtual mode
@@ -142,6 +144,14 @@ window.onYouTubeIframeAPIReady = function () {
           // so we must not resolve on it.
           if (e.data === 1) _scanResolveTrack('ok', _scanNonce);
           return;
+        }
+        if (e.data === YT.PlayerState.PLAYING) {
+          // Keep the now-playing label in sync with what's actually playing.
+          // syncActiveTrack sets it at playIndex() time; this corrects any
+          // stale label (error recovery, resume mismatch, etc.).
+          const item  = items[currentIndex];
+          const label = item ? (item.title || item.videoId || '') : '–';
+          nowPlayingEl.innerHTML = `<span>Now playing:</span>${escapeHtml(label)}`;
         }
         if (e.data === YT.PlayerState.ENDED) {
           const nextIdx = _nextVisibleIdx(currentIndex, 1);
@@ -238,6 +248,16 @@ async function _testOneTrack(item) {
 function _scanMute()   { _scanWasMuted = ytPlayer.isMuted(); if (!_scanWasMuted) ytPlayer.mute(); }
 function _scanUnmute() { if (!_scanWasMuted) ytPlayer.unMute(); }
 
+function _markScanningItem(item) {
+  const newIdx = item ? items.indexOf(item) : -1;
+  if (newIdx === _scanningIdx) return;
+  if (_scanningIdx >= 0)
+    trackListEl.querySelector(`.track-item[data-idx="${_scanningIdx}"]`)?.classList.remove('scanning');
+  _scanningIdx = newIdx;
+  if (_scanningIdx >= 0)
+    trackListEl.querySelector(`.track-item[data-idx="${_scanningIdx}"]`)?.classList.add('scanning');
+}
+
 function _scrollToScanItem(item) {
   if (!document.getElementById('settings-overlay')?.hidden) return;
   const itemIdx = items.indexOf(item);
@@ -262,6 +282,11 @@ function _scrollToScanItem(item) {
 async function scanAllTracks(onProgress) {
   if (_scanActive || !ytReady || !ytPlayer) return;
   _scanActive = true;
+  const _resumeItem = items[currentIndex];
+  _scanResumeState = _resumeItem?.videoId ? {
+    videoId: _resumeItem.videoId,
+    positionSec: (() => { try { return Math.floor(ytPlayer.getCurrentTime() ?? 0); } catch { return 0; } })(),
+  } : null;
   _scanMute();
   let found = 0;
   const candidates = items.filter(it => it.restricted == null && it.videoId);
@@ -273,6 +298,7 @@ async function scanAllTracks(onProgress) {
     scanned++;
     onProgress({ scanned, total, found, title: item.title, done: false });
     _scrollToScanItem(item);
+    _markScanningItem(item);
 
     const result = await _testOneTrack(item);
     if (result === 'fail') {
@@ -290,6 +316,7 @@ async function scanAllTracks(onProgress) {
   _scanActive = false;
   _scanCurrentItem = null;
   _scanResolveTrack = null;
+  _markScanningItem(null);
   _scanUnmute();
   onProgress({ scanned: total, total, found, title: '', done: true });
 }
@@ -297,6 +324,11 @@ async function scanAllTracks(onProgress) {
 async function scanRestrictedTracks(onProgress) {
   if (_scanActive || !ytReady || !ytPlayer) return;
   _scanActive = true;
+  const _resumeItem = items[currentIndex];
+  _scanResumeState = _resumeItem?.videoId ? {
+    videoId: _resumeItem.videoId,
+    positionSec: (() => { try { return Math.floor(ytPlayer.getCurrentTime() ?? 0); } catch { return 0; } })(),
+  } : null;
   _scanMute();
   let unblocked = 0;
   const candidates = items.filter(it => it.restricted === true && it.videoId);
@@ -308,6 +340,7 @@ async function scanRestrictedTracks(onProgress) {
     scanned++;
     onProgress({ scanned, total, unblocked, title: item.title, done: false });
     _scrollToScanItem(item);
+    _markScanningItem(item);
 
     const result = await _testOneTrack(item);
     if (result === 'ok') {
@@ -323,6 +356,7 @@ async function scanRestrictedTracks(onProgress) {
   _scanActive = false;
   _scanCurrentItem = null;
   _scanResolveTrack = null;
+  _markScanningItem(null);
   _scanUnmute();
   onProgress({ scanned: total, total, unblocked, title: '', done: true });
 }
@@ -559,6 +593,20 @@ async function loadPlaylist() {
     startScanRestricted:   (onProgress) => scanRestrictedTracks(onProgress),
     clearRestricted:       clearRestrictedState,
     getUnknownCount:       () => items.filter(it => it.restricted == null && it.videoId).length,
+    onScanStatus:          (text) => {
+      if (text) {
+        nowPlayingEl.innerHTML = `<span>Scanning:</span>${escapeHtml(text)}`;
+      } else {
+        const item  = items[currentIndex];
+        const label = item ? (item.title || item.videoId || '') : '–';
+        nowPlayingEl.innerHTML = `<span>Now playing:</span>${escapeHtml(label)}`;
+        // Restore the track that was playing before the scan started.
+        if (_scanResumeState && ytReady && ytPlayer) {
+          ytPlayer.loadVideoById({ videoId: _scanResumeState.videoId, startSeconds: _scanResumeState.positionSec });
+          _scanResumeState = null;
+        }
+      }
+    },
   });
 
   // Start with saved playlist (if still available and not hidden), else first non-hidden
@@ -586,16 +634,45 @@ function _populateYearFilter() {
     return;
   }
   yearFilterBtnEl.style.display = '';
+
+  // Toggle-all row
+  const toggleAllEl = document.createElement('div');
+  toggleAllEl.className = 'year-option year-toggle-all';
+  const _refreshToggleAll = () => {
+    const allSelected = years.every(y => activeYearFilter.has(String(y)));
+    toggleAllEl.textContent = allSelected ? 'Clear all' : 'Select all';
+    toggleAllEl.classList.toggle('selected', allSelected);
+  };
+  toggleAllEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const allSelected = years.every(y => activeYearFilter.has(String(y)));
+    if (allSelected) {
+      activeYearFilter.clear();
+    } else {
+      years.forEach(y => activeYearFilter.add(String(y)));
+    }
+    yearFilterDropEl.querySelectorAll('.year-option[data-year]').forEach(opt => {
+      opt.classList.toggle('selected', activeYearFilter.has(opt.dataset.year));
+    });
+    _refreshToggleAll();
+    _updateYearFilterBtn();
+    renderTrackList();
+  });
+  _refreshToggleAll();
+  yearFilterDropEl.appendChild(toggleAllEl);
+
   for (const year of years) {
     const y = String(year);
     const opt = document.createElement('div');
     opt.className = 'year-option' + (activeYearFilter.has(y) ? ' selected' : '');
+    opt.dataset.year = y;
     opt.textContent = y;
     opt.addEventListener('click', (e) => {
       e.stopPropagation();
       if (activeYearFilter.has(y)) activeYearFilter.delete(y);
       else activeYearFilter.add(y);
       opt.classList.toggle('selected', activeYearFilter.has(y));
+      _refreshToggleAll();
       _updateYearFilterBtn();
       renderTrackList();
     });
@@ -667,7 +744,7 @@ function _makeTrackEl({ item, idx, displayNum }) {
   const restricted = !!item.restricted;
   const videoId = item?.videoId ? String(item.videoId) : '';
   const el = document.createElement('div');
-  el.className = 'track-item' + (idx === currentIndex ? ' active' : '') + (restricted ? ' restricted' : '');
+  el.className = 'track-item' + (idx === currentIndex ? ' active' : '') + (restricted ? ' restricted' : '') + (idx === _scanningIdx ? ' scanning' : '');
   el.dataset.idx = idx;
   if (restricted) {
     el.title = videoId
@@ -880,9 +957,11 @@ function syncActiveTrack(dir = 0) {
     el.classList.toggle('active', parseInt(el.dataset.idx, 10) === currentIndex);
   });
 
-  const item  = items[currentIndex];
-  const label = item ? (item.title || item.videoId || '') : '–';
-  nowPlayingEl.innerHTML = `<span>Now playing:</span>${escapeHtml(label)}`;
+  if (!_scanActive) {
+    const item  = items[currentIndex];
+    const label = item ? (item.title || item.videoId || '') : '–';
+    nowPlayingEl.innerHTML = `<span>Now playing:</span>${escapeHtml(label)}`;
+  }
 }
 
 // ── Playback ──────────────────────────────────────────────────────────────────

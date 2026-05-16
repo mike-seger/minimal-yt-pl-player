@@ -70,13 +70,13 @@ export function recordFailedId(id) {
 }
 
 // ── Callbacks injected by player.js ──────────────────────────────────────────
-const _cb = { onHideRestrictedChange: null, onPlaylistsChange: null, onOpen: null, startScan: null, cancelScan: null, startScanRestricted: null, clearRestricted: null, getUnknownCount: null };
+const _cb = { onHideRestrictedChange: null, onPlaylistsChange: null, onOpen: null, startScan: null, cancelScan: null, startScanRestricted: null, clearRestricted: null, getUnknownCount: null, onScanStatus: null };
 let _getAllPlaylists = null;
 
 // ── DOM elements (set after DOMContentLoaded via initSettings) ────────────────
-let _overlayEl, _listEl, _failedCountEl, _hideRestrictedCb, _scanBtn, _scanRestrictedBtn, _clearRestrictedBtn, _scanStatus;
+let _overlayEl, _listEl, _failedCountEl, _hideRestrictedCb, _scanBtn, _scanRestrictedBtn, _clearRestrictedBtn;
 
-export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAllPlaylists, onOpen, startScan, cancelScan, startScanRestricted, clearRestricted, getUnknownCount }) {
+export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAllPlaylists, onOpen, startScan, cancelScan, startScanRestricted, clearRestricted, getUnknownCount, onScanStatus }) {
   _cb.onHideRestrictedChange = onHideRestrictedChange;
   _cb.onPlaylistsChange      = onPlaylistsChange;
   _cb.onOpen                 = onOpen;
@@ -85,6 +85,7 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
   _cb.startScanRestricted    = startScanRestricted;
   _cb.clearRestricted        = clearRestricted;
   _cb.getUnknownCount        = getUnknownCount;
+  _cb.onScanStatus           = onScanStatus;
   _getAllPlaylists            = getAllPlaylists;
 
   _overlayEl           = document.getElementById('settings-overlay');
@@ -94,8 +95,6 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
   _scanBtn             = document.getElementById('settings-scan-btn');
   _scanRestrictedBtn   = document.getElementById('settings-scan-restricted-btn');
   _clearRestrictedBtn  = document.getElementById('settings-clear-restricted-btn');
-  _scanStatus          = document.getElementById('settings-scan-status');
-
   _hideRestrictedCb.checked = _settings.hideRestricted;
   _hideRestrictedCb.addEventListener('change', () => setHideRestricted(_hideRestrictedCb.checked));
 
@@ -131,6 +130,11 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
     setTimeout(() => { copyBtn.textContent = 'Copy to clipboard'; }, 2000);
   });
 
+  // Updates the status element and notifies the player (live=true while actively scanning).
+  function _setScanStatus(text, live = false) {
+    _cb.onScanStatus?.(live ? text : null);
+  }
+
   let _scanning = false;
   let _scanStartMs = 0;
   _scanBtn.addEventListener('click', () => {
@@ -138,26 +142,24 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
       _cb.cancelScan?.();
       _scanning = false;
       _updateScanAllLabel();
-      _scanStatus.hidden = false;
-      _scanStatus.textContent = 'Scan stopped.';
+      _setScanStatus('Scan stopped.');
       return;
     }
     _scanning = true;
     _scanStartMs = Date.now();
     _scanBtn.textContent = 'Stop Scanning Tracks';
-    _scanStatus.hidden = false;
-    _scanStatus.textContent = 'Starting scan…';
+    _setScanStatus('Starting scan…', true);
     _cb.startScan?.(({ scanned, total, found, title, done }) => {
       if (done) {
         _scanning = false;
         _updateScanAllLabel();
-        _scanStatus.textContent = `Scan complete — ${found} restricted found out of ${total} unknown track${total !== 1 ? 's' : ''}.`;
+        _setScanStatus(`Scan complete — ${found} restricted found out of ${total} unknown track${total !== 1 ? 's' : ''}.`);
         _renderFailedSection();
         return;
       }
       const eta = _fmtEta(_scanStartMs, scanned, total);
       const etaPart = eta ? ` · ETA ${eta}` : '';
-      _scanStatus.textContent = `${scanned} / ${total} scanned · ${found} restricted${etaPart}`;
+      _setScanStatus(`${scanned} / ${total} scanned · ${found} restricted${etaPart}`, true);
     });
   });
 
@@ -168,32 +170,29 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
       _cb.cancelScan?.();
       _scanningRestricted = false;
       _scanRestrictedBtn.textContent = 'Scan Restricted';
-      _scanStatus.hidden = false;
-      _scanStatus.textContent = 'Re-scan stopped.';
+      _setScanStatus('Re-scan stopped.');
       return;
     }
     _scanningRestricted = true;
     _scanRestrictedStartMs = Date.now();
     _scanRestrictedBtn.textContent = 'Stop Scanning Restricted';
-    _scanStatus.hidden = false;
-    _scanStatus.textContent = 'Re-scanning restricted tracks…';
+    _setScanStatus('Re-scanning restricted tracks…', true);
     _cb.startScanRestricted?.(({ scanned, total, unblocked, title, done }) => {
       if (done) {
         _scanningRestricted = false;
         _scanRestrictedBtn.textContent = 'Scan Restricted';
-        _scanStatus.textContent = `Re-scan complete — ${unblocked} track${unblocked !== 1 ? 's' : ''} now playable out of ${total} checked.`;
+        _setScanStatus(`Re-scan complete — ${unblocked} track${unblocked !== 1 ? 's' : ''} now playable out of ${total} checked.`);
         return;
       }
       const eta = _fmtEta(_scanRestrictedStartMs, scanned, total);
       const etaPart = eta ? ` · ETA ${eta}` : '';
-      _scanStatus.textContent = `${scanned} / ${total} re-scanned · ${unblocked} now playable${etaPart}`;
+      _setScanStatus(`${scanned} / ${total} re-scanned · ${unblocked} now playable${etaPart}`, true);
     });
   });
 
   _clearRestrictedBtn.addEventListener('click', () => {
     _cb.clearRestricted?.();
-    _scanStatus.hidden = false;
-    _scanStatus.textContent = 'All track states reset to unknown.';
+    _setScanStatus('All track states reset to unknown.');
   });
 
   // File drop / click-to-upload
@@ -302,7 +301,7 @@ function _renderPlaylistSection() {
     row.querySelector('[title="Download"]').addEventListener('click', () =>
       downloadPlaylist({
         url,
-        title,
+        title: renameInput.value.trim() || title,
         customId: isCustom ? id : null,
         fetchFn: async (u) => {
           const r = await fetch(u, { cache: 'no-store' });
