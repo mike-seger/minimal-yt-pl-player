@@ -58,6 +58,7 @@ let pendingLoad = null;   // { videoId, positionSec } to apply once the player i
 let resumeSaveTimer = null;
 let activeFilter = '';    // current filter string for the active playlist
 let activeYearFilter = new Set(); // selected years; empty = show all
+let _selectedIds = new Set();    // videoIds of checked tracks
 
 // Scan state (separate from normal playback)
 let _scanActive = false;
@@ -85,6 +86,12 @@ const pickerDropdownEl   = document.getElementById('playlist-picker-dropdown');
 const filterInputEl      = document.getElementById('track-filter');
 const yearFilterBtnEl    = document.getElementById('year-filter-btn');
 const yearFilterDropEl   = document.getElementById('year-filter-dropdown');
+const selectBtnEl        = document.getElementById('select-filter-btn');
+const selectDropEl       = document.getElementById('select-dropdown');
+const confirmOverlayEl   = document.getElementById('confirm-overlay');
+const confirmMessageEl   = document.getElementById('confirm-message');
+const confirmOkEl        = document.getElementById('confirm-ok');
+const confirmCancelEl    = document.getElementById('confirm-cancel');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function escapeHtml(s) {
@@ -447,6 +454,9 @@ async function switchPlaylist(url, restoreResume = false) {
   activePlaylistUrl = url;
   items = Array.isArray(playlist.items) ? playlist.items : [];
 
+  // Load per-playlist state early (needed for removed filter below)
+  const plState = getPlaylistState(url);
+
   // Apply per-playlist restricted overrides (stored locally, independent per playlist URL)
   const overrides = getRestrictedOverrides(activePlaylistUrl);
   const overrideKeys = Object.keys(overrides);
@@ -456,6 +466,12 @@ async function switchPlaylist(url, restoreResume = false) {
         ? { ...item, restricted: overrides[item.videoId] }
         : item
     );
+  }
+
+  // Apply persistent per-playlist removals
+  const removedIds = new Set(plState.removed ?? []);
+  if (removedIds.size > 0) {
+    items = items.filter(it => !it.videoId || !removedIds.has(it.videoId));
   }
 
   const rawTitle = (typeof playlist.title === 'string' && playlist.title.trim()) || 'Playlist';
@@ -470,11 +486,12 @@ async function switchPlaylist(url, restoreResume = false) {
   document.title = `${title} – YT Player`;
 
   // Restore per-playlist state
-  const plState = getPlaylistState(url);
   activeFilter = plState.filter ?? '';
   filterInputEl.value = activeFilter;
   activeYearFilter = new Set();
+  _selectedIds = new Set(plState.selected ?? []);
   _populateYearFilter();
+  _syncSelectBtn();
 
   currentIndex = -1;
   renderTrackList();
@@ -693,10 +710,146 @@ function _updateYearFilterBtn() {
 
 yearFilterBtnEl.addEventListener('click', (e) => {
   e.stopPropagation();
+  selectDropEl.hidden = true;
   yearFilterDropEl.hidden = !yearFilterDropEl.hidden;
 });
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#year-filter')) yearFilterDropEl.hidden = true;
+});
+
+// ── Selection ─────────────────────────────────────────────────────────────────
+function _saveSelection() {
+  if (activePlaylistUrl) savePlaylistState(activePlaylistUrl, { selected: [..._selectedIds] });
+}
+
+function _toggleSelect(videoId) {
+  if (!videoId) return;
+  _selectedIds.has(videoId) ? _selectedIds.delete(videoId) : _selectedIds.add(videoId);
+  _saveSelection();
+  for (const el of trackListEl.querySelectorAll('.track-item')) {
+    const idx = parseInt(el.dataset.idx, 10);
+    if (!isNaN(idx) && items[idx]?.videoId === videoId) {
+      el.classList.toggle('selected', _selectedIds.has(videoId));
+    }
+  }
+  _syncSelectBtn();
+}
+
+function _syncSelectBtn() {
+  selectBtnEl.classList.toggle('active', _selectedIds.size > 0);
+}
+
+function _confirm(message) {
+  return new Promise(resolve => {
+    confirmMessageEl.textContent = message;
+    confirmOverlayEl.hidden = false;
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
+    function cleanup() {
+      confirmOverlayEl.hidden = true;
+      confirmOkEl.removeEventListener('click', onOk);
+      confirmCancelEl.removeEventListener('click', onCancel);
+    }
+    confirmOkEl.addEventListener('click', onOk);
+    confirmCancelEl.addEventListener('click', onCancel);
+  });
+}
+
+async function _clearSelection() {
+  if (!_selectedIds.size) return;
+  const n = _selectedIds.size;
+  const ok = await _confirm(`Clear ${n} selected track${n !== 1 ? 's' : ''}?`);
+  if (!ok) return;
+  _selectedIds.clear();
+  _saveSelection();
+  renderTrackList();
+  _syncSelectBtn();
+}
+
+function _invertSelection() {
+  const newSel = new Set();
+  for (const { item } of _buildVisibleItems()) {
+    if (item.videoId && !_selectedIds.has(item.videoId)) newSel.add(item.videoId);
+  }
+  _selectedIds = newSel;
+  _saveSelection();
+  renderTrackList();
+  _syncSelectBtn();
+}
+
+function _selectByRestricted(restricted) {
+  for (const { item } of _buildVisibleItems()) {
+    if (item.videoId && !!item.restricted === restricted) _selectedIds.add(item.videoId);
+  }
+  _saveSelection();
+  renderTrackList();
+  _syncSelectBtn();
+}
+
+function _copySelectionTsv() {
+  const rows = items
+    .filter(it => it.videoId && _selectedIds.has(it.videoId))
+    .map(it => [it.videoId, it.title ?? '', it.year ?? '', it.restricted != null ? String(it.restricted) : ''].join('\t'));
+  if (rows.length) navigator.clipboard.writeText(rows.join('\n'));
+}
+
+async function _removeSelected() {
+  if (!_selectedIds.size) return;
+  const n = _selectedIds.size;
+  const ok = await _confirm(`Permanently remove ${n} selected track${n !== 1 ? 's' : ''}?`);
+  if (!ok) return;
+
+  // Persist removed videoIds in playlist state
+  if (activePlaylistUrl) {
+    const plState = getPlaylistState(activePlaylistUrl);
+    const existing = new Set(plState.removed ?? []);
+    for (const id of _selectedIds) existing.add(id);
+    savePlaylistState(activePlaylistUrl, { removed: [...existing] });
+  }
+
+  // Compute currentIndex adjustment before filtering
+  let removedBefore = 0;
+  let currentRemoved = false;
+  items.forEach((it, idx) => {
+    if (!it.videoId || !_selectedIds.has(it.videoId)) return;
+    if (idx < currentIndex) removedBefore++;
+    if (idx === currentIndex) currentRemoved = true;
+  });
+
+  items = items.filter(it => !it.videoId || !_selectedIds.has(it.videoId));
+  currentIndex = currentRemoved
+    ? Math.min(currentIndex - removedBefore, items.length - 1)
+    : currentIndex - removedBefore;
+
+  _selectedIds.clear();
+  _saveSelection();
+  _refreshTrackCounts();
+  renderTrackList();
+  _syncSelectBtn();
+
+  if (currentRemoved && items.length > 0) playIndex(Math.max(0, currentIndex));
+}
+
+// ── Select-filter dropdown ────────────────────────────────────────────────────
+selectBtnEl.addEventListener('click', (e) => {
+  e.stopPropagation();
+  yearFilterDropEl.hidden = true;
+  selectDropEl.hidden = !selectDropEl.hidden;
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#select-filter')) selectDropEl.hidden = true;
+});
+selectDropEl.addEventListener('click', async (e) => {
+  const opt = e.target.closest('.select-option');
+  if (!opt) return;
+  selectDropEl.hidden = true;
+  const action = opt.dataset.action;
+  if (action === 'clear')            await _clearSelection();
+  if (action === 'invert')           _invertSelection();
+  if (action === 'select-enabled')   _selectByRestricted(false);
+  if (action === 'select-disabled')  _selectByRestricted(true);
+  if (action === 'copy-tsv')         _copySelectionTsv();
+  if (action === 'remove')           await _removeSelected();
 });
 
 function matchesFilter(item) {
@@ -744,7 +897,7 @@ function _makeTrackEl({ item, idx, displayNum }) {
   const restricted = !!item.restricted;
   const videoId = item?.videoId ? String(item.videoId) : '';
   const el = document.createElement('div');
-  el.className = 'track-item' + (idx === currentIndex ? ' active' : '') + (restricted ? ' restricted' : '') + (idx === _scanningIdx ? ' scanning' : '');
+  el.className = 'track-item' + (idx === currentIndex ? ' active' : '') + (restricted ? ' restricted' : '') + (idx === _scanningIdx ? ' scanning' : '') + (videoId && _selectedIds.has(videoId) ? ' selected' : '');
   el.dataset.idx = idx;
   if (restricted) {
     el.title = videoId
@@ -763,6 +916,7 @@ function _makeTrackEl({ item, idx, displayNum }) {
   };
 
   el.innerHTML = `
+    <span class="track-checkbox"></span>
     <span class="track-num">${displayNum}</span>
     ${thumb ? `<img class="track-thumb" src="${escapeAttr(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
     <div class="track-info">
@@ -772,6 +926,13 @@ function _makeTrackEl({ item, idx, displayNum }) {
       </div>
       ${artist ? `<div class="track-subtitle">${escapeHtml(song)}</div>` : ''}
     </div>`;
+
+  if (videoId) {
+    el.querySelector('.track-checkbox').addEventListener('click', (e) => {
+      e.stopPropagation();
+      _toggleSelect(videoId);
+    });
+  }
 
   if (restricted && videoId) {
     let longPressStartX = 0;

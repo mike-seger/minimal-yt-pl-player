@@ -24,6 +24,17 @@
       </div>
     </div>
     <div id="track-filter-wrap">
+      <div id="select-filter">
+        <button id="select-filter-btn" title="Selection"></button>
+        <div id="select-dropdown" hidden>
+          <div class="select-option" data-action="clear">Clear selection</div>
+          <div class="select-option" data-action="invert">Invert selection</div>
+          <div class="select-option" data-action="select-enabled">Select all enabled</div>
+          <div class="select-option" data-action="select-disabled">Select all disabled</div>
+          <div class="select-option" data-action="copy-tsv">Copy selection as TSV</div>
+          <div class="select-option select-option-danger" data-action="remove">Remove selected items</div>
+        </div>
+      </div>
       <input id="track-filter" type="search" placeholder="Filter tracks…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <div id="year-filter">
         <button id="year-filter-btn" title="Filter by year">Year</button>
@@ -73,6 +84,16 @@
           </div>
         </section>
 
+      </div>
+    </div>
+
+    <div id="confirm-overlay" hidden>
+      <div id="confirm-box">
+        <div id="confirm-message"></div>
+        <div id="confirm-buttons">
+          <button id="confirm-cancel" class="settings-btn">Cancel</button>
+          <button id="confirm-ok" class="settings-btn">Confirm</button>
+        </div>
       </div>
     </div>
   </aside>
