@@ -1301,9 +1301,11 @@ function syncActiveTrack(dir = 0) {
     el.classList.toggle('active', parseInt(el.dataset.idx, 10) === currentIndex);
   });
 
-  // Move focus to the active track element
+  // Move focus to the active track element — but not if an input/textarea has focus
   const focusEl = trackListEl.querySelector(`.track-item[data-idx="${currentIndex}"]`);
-  if (focusEl) focusEl.focus({ preventScroll: true });
+  const active = document.activeElement;
+  const inputFocused = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+  if (focusEl && !inputFocused) focusEl.focus({ preventScroll: true });
 
   if (!_scanActive) {
     const item  = items[currentIndex];
