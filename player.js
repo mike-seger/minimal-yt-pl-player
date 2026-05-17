@@ -236,6 +236,9 @@ function _refreshTrackCounts() {
   if (!entry) return;
   entry.playableCount   = items.filter(it => it.restricted !== true).length;
   entry.restrictedCount = items.filter(it => it.restricted === true).length;
+  trackCountEl.textContent = entry.restrictedCount
+    ? `${entry.playableCount} tracks · ${entry.restrictedCount} restricted`
+    : `${entry.playableCount} tracks`;
 }
 
 // Tests one track; returns 'ok' | 'fail' | 'cancelled'.

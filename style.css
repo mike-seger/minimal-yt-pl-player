@@ -535,6 +535,7 @@ html, body {
     overflow: hidden;
     flex-shrink: 0;
     box-sizing: border-box;
+    user-select: none;
 }
 
 .track-item:hover { background: var(--hover-bg); }
