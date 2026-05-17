@@ -357,15 +357,21 @@ html, body {
     flex-shrink: 0;
 }
 
-#track-filter {
+#filter-input-wrap {
     flex: 1;
     min-width: 0;
+    position: relative;
+}
+
+#track-filter {
+    width: 100%;
+    box-sizing: border-box;
     background: var(--bg);
     border: none;
     border-radius: 0;
     color: var(--text);
     font-size: 13px;
-    padding: 7px 12px;
+    padding: 7px 28px 7px 12px;
     outline: none;
     -webkit-appearance: none;
     appearance: none;
@@ -374,6 +380,25 @@ html, body {
 #track-filter:focus { border-color: var(--accent); }
 /* Hide native clear button in webkit */
 #track-filter::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+#filter-clear-btn:not([hidden]) { display: flex; }
+#filter-clear-btn {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 28px;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 11px;
+    padding: 0;
+}
+#filter-clear-btn:hover { background: var(--hover-bg); color: var(--text); }
 
 #year-filter {
     position: relative;

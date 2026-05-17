@@ -92,6 +92,7 @@ const btnNext            = document.getElementById('btn-next');
 const pickerEl           = document.getElementById('playlist-picker');
 const pickerDropdownEl   = document.getElementById('playlist-picker-dropdown');
 const filterInputEl      = document.getElementById('track-filter');
+const filterClearBtn     = document.getElementById('filter-clear-btn');
 const yearFilterBtnEl    = document.getElementById('year-filter-btn');
 const yearFilterDropEl   = document.getElementById('year-filter-dropdown');
 const selectBtnEl        = document.getElementById('select-filter-btn');
@@ -549,6 +550,7 @@ async function switchPlaylist(url, restoreResume = false, deepLinkTarget = null)
   // Restore per-playlist state
   activeFilter = plState.filter ?? '';
   filterInputEl.value = activeFilter;
+  filterClearBtn.hidden = !activeFilter;
   activeYearFilter = new Set();
   _selectedIds = new Set(plState.selected ?? []);
   _populateYearFilter();
@@ -1413,12 +1415,20 @@ document.addEventListener('touchend', (e) => {
 let _filterDebounceTimer = null;
 filterInputEl.addEventListener('input', () => {
   activeFilter = filterInputEl.value;
+  filterClearBtn.hidden = !activeFilter;
   if (activePlaylistUrl) savePlaylistState(activePlaylistUrl, { filter: activeFilter });
   clearTimeout(_filterDebounceTimer);
   _filterDebounceTimer = setTimeout(() => {
     renderTrackList();
     if (currentIndex >= 0) syncActiveTrack(0);
   }, 150);
+});
+
+filterClearBtn.addEventListener('click', () => {
+  filterInputEl.value = '';
+  filterClearBtn.hidden = true;
+  filterInputEl.dispatchEvent(new Event('input'));
+  filterInputEl.focus();
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

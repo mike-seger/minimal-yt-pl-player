@@ -41,7 +41,10 @@
           <div class="select-option select-option-toggle" data-action="toggle-stop-at-unplayable">Stop at unplayable track</div>
         </div>
       </div>
-      <input id="track-filter" type="search" placeholder="Filter tracks…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <div id="filter-input-wrap">
+        <input id="track-filter" type="search" placeholder="Filter tracks…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button id="filter-clear-btn" hidden title="Clear filter">&#10005;</button>
+      </div>
       <div id="year-filter">
         <button id="year-filter-btn" title="Filter by year">Year</button>
         <div id="year-filter-dropdown" hidden></div>
