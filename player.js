@@ -1,5 +1,6 @@
 import {
   isHideRestricted, setHideRestricted, isDisableRestricted, setDisableRestricted,
+  isStopAtUnplayable, setStopAtUnplayable,
   getScanConsecFailThreshold,
   getHiddenPlaylists, initSettings, updateScanButtons, recordFailedId,
   getPlaylistNameOverride,
@@ -9,7 +10,10 @@ import {
   getPlaylistState, savePlaylistState,
   initCustomPlaylists,
   getRestrictedOverrides, saveRestrictedOverride, clearRestrictedOverrides,
+  getVideoIdOverrides, saveVideoIdOverride,
+  getTrackAttributeOverrides, saveTrackAttributeOverride,
 } from './playlist.js';
+import { openTrackEditor, recordVideoIdHistory } from './track-edit.js';
 
 // ── Rendering thresholds ──────────────────────────────────────────────────────
 // Below FULL_RENDER_THRESHOLD (post-filter count) every matching item gets a DOM node.
@@ -202,6 +206,7 @@ window.onYouTubeIframeAPIReady = function () {
           _playConsecFails = 0;
           return; // stop advancing — too many consecutive failures
         }
+        if (isStopAtUnplayable()) return; // stop here — don't skip to next
         if (currentIndex < items.length - 1) setTimeout(() => {
           const nextIdx = _nextVisibleIdx(currentIndex, 1);
           if (nextIdx >= 0) playIndex(nextIdx, 0, 1);
@@ -493,6 +498,19 @@ async function switchPlaylist(url, restoreResume = false, deepLinkTarget = null)
 
   activePlaylistUrl = url;
   items = Array.isArray(playlist.items) ? playlist.items : [];
+
+  // Apply persistent per-playlist videoId and attribute (title/year) overrides
+  const vidOverrides  = getVideoIdOverrides(url);
+  const attrOverrides = getTrackAttributeOverrides(url);
+  if (Object.keys(vidOverrides).length > 0 || Object.keys(attrOverrides).length > 0) {
+    items = items.map(item => {
+      const key = item.videoId ?? ('\x00' + (item.title ?? ''));
+      let out = item;
+      if (key in vidOverrides)  out = { ...out, videoId: vidOverrides[key] };
+      if (key in attrOverrides) out = { ...out, ...attrOverrides[key] };
+      return out;
+    });
+  }
 
   // Load per-playlist state early (needed for removed filter below)
   const plState = getPlaylistState(url);
@@ -904,7 +922,62 @@ async function _removeSelected() {
   if (currentRemoved && items.length > 0) playIndex(Math.max(0, currentIndex));
 }
 
-// ── Select-filter dropdown ────────────────────────────────────────────────────
+const _videoIdUndoStack = []; // [{ idx, overrideKey, oldVideoId }] max 10
+
+function _extractYtVideoId(text) {
+  text = text.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(text)) return text;
+  try {
+    const u = new URL(text);
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1).split(/[?#]/)[0] || null;
+    const v = u.searchParams.get('v');
+    if (v) return v;
+    const m = u.pathname.match(/\/(?:embed|shorts|v)\/([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+  } catch {}
+  return null;
+}
+
+async function _openEditForTrack(idx) {
+  const item = items[idx];
+  if (!item || !activePlaylistUrl) return;
+  const overrideKey = item.videoId ?? ('\x00' + (item.title ?? ''));
+
+  const result = await openTrackEditor({ item, playlistUrl: activePlaylistUrl, overrideKey });
+  if (!result) return;
+
+  // VideoId: extract and persist if changed
+  const rawVid = result.videoId;
+  const newVid = rawVid ? (_extractYtVideoId(rawVid) ?? null) : null;
+  if (newVid && newVid !== item.videoId) {
+    if (item.videoId) recordVideoIdHistory(activePlaylistUrl, overrideKey, item.videoId);
+    _videoIdUndoStack.push({ idx, overrideKey, oldVideoId: item.videoId ?? null });
+    if (_videoIdUndoStack.length > 10) _videoIdUndoStack.shift();
+    item.videoId = newVid;
+    saveVideoIdOverride(activePlaylistUrl, overrideKey, newVid);
+  }
+
+  // Title / year attribute overrides
+  const overrideAttrs = {};
+  if (result.title) overrideAttrs.title = result.title;
+  const yr = result.year.trim();
+  if (yr !== '') overrideAttrs.year = isNaN(+yr) ? yr : +yr;
+  saveTrackAttributeOverride(activePlaylistUrl, overrideKey, overrideAttrs);
+  if (overrideAttrs.title !== undefined) item.title = overrideAttrs.title;
+  if (overrideAttrs.year  !== undefined) item.year  = overrideAttrs.year;
+
+  renderTrackList();
+}
+
+function _undoVideoIdOverride() {
+  const entry = _videoIdUndoStack.pop();
+  if (!entry) return;
+  const item = items[entry.idx];
+  if (!item) return;
+  item.videoId = entry.oldVideoId;
+  if (activePlaylistUrl) saveVideoIdOverride(activePlaylistUrl, entry.overrideKey, entry.oldVideoId);
+  renderTrackList();
+}
 function _syncDropdownToggles() {
   selectDropEl.querySelector('[data-action="hide-unselected"]')
     ?.classList.toggle('select-option-on', _hideUnselected);
@@ -912,6 +985,8 @@ function _syncDropdownToggles() {
     ?.classList.toggle('select-option-on', isHideRestricted());
   selectDropEl.querySelector('[data-action="toggle-disable-restricted"]')
     ?.classList.toggle('select-option-on', isDisableRestricted());
+  selectDropEl.querySelector('[data-action="toggle-stop-at-unplayable"]')
+    ?.classList.toggle('select-option-on', isStopAtUnplayable());
 }
 
 selectBtnEl.addEventListener('click', (e) => {
@@ -939,6 +1014,7 @@ selectDropEl.addEventListener('click', async (e) => {
   if (action === 'remove')                    await _removeSelected();
   if (action === 'toggle-hide-restricted')    setHideRestricted(!isHideRestricted());
   if (action === 'toggle-disable-restricted') setDisableRestricted(!isDisableRestricted());
+  if (action === 'toggle-stop-at-unplayable') setStopAtUnplayable(!isStopAtUnplayable());
   if (isToggle) _syncDropdownToggles();
 });
 
@@ -1091,6 +1167,15 @@ function _makeTrackEl({ item, idx, displayNum }) {
   });
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && videoId) { e.preventDefault(); _toggleSelect(videoId); }
+    if ((e.key === 'e' || e.key === 'E') && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      _openEditForTrack(idx);
+    }
+  });
+  el.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.track-checkbox')) return;
+    e.preventDefault();
+    _openEditForTrack(idx);
   });
   return el;
 }
@@ -1231,6 +1316,7 @@ function playIndex(idx, positionSec = 0, dir = 0) {
 
   const item = items[idx];
   if (item?.restricted && isDisableRestricted()) {
+    if (isStopAtUnplayable()) return; // stop, don't skip
     // Infer direction from caller if not supplied, default forward
     const step = dir !== 0 ? dir : 1;
     const nextIdx = _nextVisibleIdx(idx, step);
@@ -1259,6 +1345,11 @@ function playIndex(idx, positionSec = 0, dir = 0) {
 // ── Keyboard controls ─────────────────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey && _videoIdUndoStack.length) {
+    e.preventDefault();
+    _undoVideoIdOverride();
+    return;
+  }
 
   switch (e.key) {
     case ' ':

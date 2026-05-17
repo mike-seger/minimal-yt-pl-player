@@ -15,11 +15,12 @@ function _loadSettings() {
     return {
       hideRestricted:    'hideRestricted'    in s ? !!s.hideRestricted    : true,
       disableRestricted: 'disableRestricted' in s ? !!s.disableRestricted : true,
+      stopAtUnplayable:  'stopAtUnplayable'  in s ? !!s.stopAtUnplayable  : false,
       scanConsecFailThreshold: Number.isInteger(s.scanConsecFailThreshold) && s.scanConsecFailThreshold > 0 ? s.scanConsecFailThreshold : 10,
       hiddenPlaylists: Array.isArray(s.hiddenPlaylists) ? s.hiddenPlaylists : [],
       nameOverrides:   (s.nameOverrides && typeof s.nameOverrides === 'object') ? s.nameOverrides : {},
     };
-  } catch { return { hideRestricted: true, disableRestricted: true, scanConsecFailThreshold: 10, hiddenPlaylists: [], nameOverrides: {} }; }
+  } catch { return { hideRestricted: true, disableRestricted: true, stopAtUnplayable: false, scanConsecFailThreshold: 10, hiddenPlaylists: [], nameOverrides: {} }; }
 }
 function _saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings)); } catch {}
@@ -28,6 +29,7 @@ let _settings = _loadSettings();
 
 export function isHideRestricted()            { return _settings.hideRestricted; }
 export function isDisableRestricted()         { return _settings.disableRestricted; }
+export function isStopAtUnplayable()          { return _settings.stopAtUnplayable; }
 export function getScanConsecFailThreshold()  { return _settings.scanConsecFailThreshold; }
 export function getHiddenPlaylists() { return new Set(_settings.hiddenPlaylists); }
 export function getPlaylistNameOverride(url) { return _settings.nameOverrides[url] ?? null; }
@@ -48,6 +50,10 @@ export function setHideRestricted(val) {
 }
 export function setDisableRestricted(val) {
   _settings.disableRestricted = !!val;
+  _saveSettings();
+}
+export function setStopAtUnplayable(val) {
+  _settings.stopAtUnplayable = !!val;
   _saveSettings();
 }
 

@@ -56,6 +56,43 @@ export function clearRestrictedOverrides(url) {
   _savePlState();
 }
 
+// ── Per-playlist videoId overrides ────────────────────────────────────────────
+// Stored in _plState[url].videoIdOverrides as { [key]: newVideoId | null }.
+// Key = original videoId, or '\x00' + title for tracks without a videoId.
+export function getVideoIdOverrides(url) {
+  return _plState[url]?.videoIdOverrides ?? {};
+}
+
+export function saveVideoIdOverride(url, key, newVideoId) {
+  if (!_plState[url]) _plState[url] = {};
+  if (!_plState[url].videoIdOverrides) _plState[url].videoIdOverrides = {};
+  if (newVideoId === null || newVideoId === undefined) {
+    delete _plState[url].videoIdOverrides[key];
+  } else {
+    _plState[url].videoIdOverrides[key] = newVideoId;
+  }
+  _savePlState();
+}
+
+// ── Per-playlist track attribute overrides (title, year) ──────────────────────
+// Stored in _plState[url].trackOverrides as { [key]: { title?, year? } }.
+// Key = same overrideKey as videoIdOverrides (original videoId or '\x00'+title).
+// Saving an empty attrs object removes the entry.
+export function getTrackAttributeOverrides(url) {
+  return _plState[url]?.trackOverrides ?? {};
+}
+
+export function saveTrackAttributeOverride(url, key, attrs) {
+  if (!_plState[url]) _plState[url] = {};
+  if (!_plState[url].trackOverrides) _plState[url].trackOverrides = {};
+  if (!attrs || Object.keys(attrs).length === 0) {
+    delete _plState[url].trackOverrides[key];
+  } else {
+    _plState[url].trackOverrides[key] = attrs;
+  }
+  _savePlState();
+}
+
 // ── IndexedDB helpers ─────────────────────────────────────────────────────────
 let _db = null; // set by initCustomPlaylists; null means use localStorage fallback
 
