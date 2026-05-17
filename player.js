@@ -1273,9 +1273,9 @@ function syncActiveTrack(dir = 0) {
       const st         = trackListEl.scrollTop;
       const ch         = trackListEl.clientHeight;
 
-      if (dir >= 0 && itemBottom > st + ch) {
+      if (itemTop < st) {
         trackListEl.scrollTo({ top: itemTop, behavior: 'smooth' });
-      } else if (dir <= 0 && itemTop < st) {
+      } else if (itemBottom > st + ch) {
         trackListEl.scrollTo({ top: itemBottom - ch, behavior: 'smooth' });
       }
       // Ensure the node is in the DOM after the potential scroll
@@ -1286,10 +1286,10 @@ function syncActiveTrack(dir = 0) {
     if (activeEl) {
       const listRect = trackListEl.getBoundingClientRect();
       const elRect   = activeEl.getBoundingClientRect();
-      if (dir >= 0 && elRect.bottom > listRect.bottom) {
+      if (elRect.top < listRect.top) {
         const elTopInScroll = elRect.top - listRect.top + trackListEl.scrollTop;
         trackListEl.scrollTo({ top: elTopInScroll, behavior: 'smooth' });
-      } else if (dir <= 0 && elRect.top < listRect.top) {
+      } else if (elRect.bottom > listRect.bottom) {
         const elBottomInScroll = elRect.bottom - listRect.top + trackListEl.scrollTop;
         trackListEl.scrollTo({ top: elBottomInScroll - trackListEl.clientHeight, behavior: 'smooth' });
       }
