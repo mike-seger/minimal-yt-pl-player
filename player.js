@@ -1,6 +1,6 @@
 import {
-  isHideRestricted, getHiddenPlaylists,
-  initSettings, updateScanButtons, recordFailedId,
+  isHideRestricted, setHideRestricted, isDisableRestricted, setDisableRestricted,
+  getHiddenPlaylists, initSettings, updateScanButtons, recordFailedId,
   getPlaylistNameOverride,
 } from './settings.js';
 import {
@@ -59,6 +59,7 @@ let resumeSaveTimer = null;
 let activeFilter = '';    // current filter string for the active playlist
 let activeYearFilter = new Set(); // selected years; empty = show all
 let _selectedIds = new Set();    // videoIds of checked tracks
+let _hideUnselected = false;     // when true, only selected tracks are shown
 
 // Scan state (separate from normal playback)
 let _scanActive = false;
@@ -831,10 +832,20 @@ async function _removeSelected() {
 }
 
 // ── Select-filter dropdown ────────────────────────────────────────────────────
+function _syncDropdownToggles() {
+  selectDropEl.querySelector('[data-action="hide-unselected"]')
+    ?.classList.toggle('select-option-on', _hideUnselected);
+  selectDropEl.querySelector('[data-action="toggle-hide-restricted"]')
+    ?.classList.toggle('select-option-on', isHideRestricted());
+  selectDropEl.querySelector('[data-action="toggle-disable-restricted"]')
+    ?.classList.toggle('select-option-on', isDisableRestricted());
+}
+
 selectBtnEl.addEventListener('click', (e) => {
   e.stopPropagation();
   yearFilterDropEl.hidden = true;
   selectDropEl.hidden = !selectDropEl.hidden;
+  if (!selectDropEl.hidden) _syncDropdownToggles();
 });
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#select-filter')) selectDropEl.hidden = true;
@@ -842,14 +853,19 @@ document.addEventListener('click', (e) => {
 selectDropEl.addEventListener('click', async (e) => {
   const opt = e.target.closest('.select-option');
   if (!opt) return;
-  selectDropEl.hidden = true;
   const action = opt.dataset.action;
-  if (action === 'clear')            await _clearSelection();
-  if (action === 'invert')           _invertSelection();
-  if (action === 'select-enabled')   _selectByRestricted(false);
-  if (action === 'select-disabled')  _selectByRestricted(true);
-  if (action === 'copy-tsv')         _copySelectionTsv();
-  if (action === 'remove')           await _removeSelected();
+  const isToggle = action === 'hide-unselected' || action.startsWith('toggle-');
+  if (!isToggle) selectDropEl.hidden = true;
+  if (action === 'clear')                     await _clearSelection();
+  if (action === 'invert')                    _invertSelection();
+  if (action === 'select-enabled')            _selectByRestricted(false);
+  if (action === 'select-disabled')           _selectByRestricted(true);
+  if (action === 'copy-tsv')                  _copySelectionTsv();
+  if (action === 'hide-unselected')           { _hideUnselected = !_hideUnselected; renderTrackList(); }
+  if (action === 'remove')                    await _removeSelected();
+  if (action === 'toggle-hide-restricted')    setHideRestricted(!isHideRestricted());
+  if (action === 'toggle-disable-restricted') setDisableRestricted(!isDisableRestricted());
+  if (isToggle) _syncDropdownToggles();
 });
 
 function matchesFilter(item) {
@@ -871,6 +887,7 @@ function _buildVisibleItems() {
   items.forEach((item, idx) => {
     if (hideRestricted && item.restricted) return;
     if (!matchesFilter(item)) return;
+    if (_hideUnselected && !(item.videoId && _selectedIds.has(item.videoId))) return;
     displayNum++;
     result.push({ item, idx, displayNum });
   });
@@ -899,6 +916,7 @@ function _makeTrackEl({ item, idx, displayNum }) {
   const el = document.createElement('div');
   el.className = 'track-item' + (idx === currentIndex ? ' active' : '') + (restricted ? ' restricted' : '') + (idx === _scanningIdx ? ' scanning' : '') + (videoId && _selectedIds.has(videoId) ? ' selected' : '');
   el.dataset.idx = idx;
+  el.tabIndex = 0;
   if (restricted) {
     el.title = videoId
       ? 'Not available in your region. Middle-click, cmd/ctrl-click, or long-press to open on YouTube.'
@@ -995,7 +1013,10 @@ function _makeTrackEl({ item, idx, displayNum }) {
       e.preventDefault();
       return;
     }
-    if (!restricted) playIndex(idx);
+    if (idx !== currentIndex && (!restricted || !isDisableRestricted())) playIndex(idx);
+  });
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && videoId) { e.preventDefault(); _toggleSelect(videoId); }
   });
   return el;
 }
@@ -1118,6 +1139,10 @@ function syncActiveTrack(dir = 0) {
     el.classList.toggle('active', parseInt(el.dataset.idx, 10) === currentIndex);
   });
 
+  // Move focus to the active track element
+  const focusEl = trackListEl.querySelector(`.track-item[data-idx="${currentIndex}"]`);
+  if (focusEl) focusEl.focus({ preventScroll: true });
+
   if (!_scanActive) {
     const item  = items[currentIndex];
     const label = item ? (item.title || item.videoId || '') : '–';
@@ -1131,7 +1156,7 @@ function playIndex(idx, positionSec = 0, dir = 0) {
   if (idx < 0 || idx >= items.length) return;  // no cycling at boundaries
 
   const item = items[idx];
-  if (item?.restricted) {
+  if (item?.restricted && isDisableRestricted()) {
     // Infer direction from caller if not supplied, default forward
     const step = dir !== 0 ? dir : 1;
     const nextIdx = _nextVisibleIdx(idx, step);

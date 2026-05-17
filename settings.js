@@ -13,18 +13,20 @@ function _loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     return {
-      hideRestricted:  'hideRestricted' in s ? !!s.hideRestricted : true,
+      hideRestricted:    'hideRestricted'    in s ? !!s.hideRestricted    : true,
+      disableRestricted: 'disableRestricted' in s ? !!s.disableRestricted : true,
       hiddenPlaylists: Array.isArray(s.hiddenPlaylists) ? s.hiddenPlaylists : [],
       nameOverrides:   (s.nameOverrides && typeof s.nameOverrides === 'object') ? s.nameOverrides : {},
     };
-  } catch { return { hideRestricted: true, hiddenPlaylists: [], nameOverrides: {} }; }
+  } catch { return { hideRestricted: true, disableRestricted: true, hiddenPlaylists: [], nameOverrides: {} }; }
 }
 function _saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings)); } catch {}
 }
 let _settings = _loadSettings();
 
-export function isHideRestricted()   { return _settings.hideRestricted; }
+export function isHideRestricted()      { return _settings.hideRestricted; }
+export function isDisableRestricted()   { return _settings.disableRestricted; }
 export function getHiddenPlaylists() { return new Set(_settings.hiddenPlaylists); }
 export function getPlaylistNameOverride(url) { return _settings.nameOverrides[url] ?? null; }
 export function setPlaylistNameOverride(url, name) {
@@ -41,6 +43,10 @@ export function setHideRestricted(val) {
   _settings.hideRestricted = !!val;
   _saveSettings();
   _cb.onHideRestrictedChange?.();
+}
+export function setDisableRestricted(val) {
+  _settings.disableRestricted = !!val;
+  _saveSettings();
 }
 
 export function toggleHiddenPlaylist(url) {
@@ -74,7 +80,7 @@ const _cb = { onHideRestrictedChange: null, onPlaylistsChange: null, onOpen: nul
 let _getAllPlaylists = null;
 
 // ── DOM elements (set after DOMContentLoaded via initSettings) ────────────────
-let _overlayEl, _listEl, _failedCountEl, _hideRestrictedCb, _scanBtn, _scanRestrictedBtn, _clearRestrictedBtn;
+let _overlayEl, _listEl, _failedCountEl, _scanBtn, _scanRestrictedBtn, _clearRestrictedBtn;
 
 export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAllPlaylists, onOpen, startScan, cancelScan, startScanRestricted, clearRestricted, getUnknownCount, onScanStatus }) {
   _cb.onHideRestrictedChange = onHideRestrictedChange;
@@ -91,12 +97,9 @@ export function initSettings({ onHideRestrictedChange, onPlaylistsChange, getAll
   _overlayEl           = document.getElementById('settings-overlay');
   _listEl              = document.getElementById('settings-playlist-list');
   _failedCountEl       = document.getElementById('settings-failed-count');
-  _hideRestrictedCb    = document.getElementById('setting-hide-restricted');
   _scanBtn             = document.getElementById('settings-scan-btn');
   _scanRestrictedBtn   = document.getElementById('settings-scan-restricted-btn');
   _clearRestrictedBtn  = document.getElementById('settings-clear-restricted-btn');
-  _hideRestrictedCb.checked = _settings.hideRestricted;
-  _hideRestrictedCb.addEventListener('change', () => setHideRestricted(_hideRestrictedCb.checked));
 
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   document.getElementById('btn-settings').addEventListener('click', (e) => {

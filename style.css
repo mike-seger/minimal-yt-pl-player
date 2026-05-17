@@ -469,6 +469,27 @@ html, body {
 .select-option:hover { background: var(--hover-bg); color: var(--text); }
 .select-option-danger { border-top: 1px solid var(--border); color: #f87171; }
 .select-option-danger:hover { color: #fca5a5; }
+.select-option-on { color: var(--text) !important; }
+.select-option-on::before { content: '\2713\00a0'; color: var(--accent); }
+.select-option-toggle {
+    position: relative;
+    padding-left: 26px;
+}
+.select-option-toggle::before {
+    content: '';
+    position: absolute;
+    left: 12px;
+    color: var(--accent);
+}
+.select-option-toggle.select-option-on::before {
+    content: '\2713';
+}
+.select-separator {
+    height: 1px;
+    background: var(--text-muted);
+    margin: 4px 0;
+    opacity: 0.4;
+}
 
 .settings-pl-rename {
     width: 100%;
@@ -508,6 +529,7 @@ html, body {
 }
 
 .track-item:hover { background: var(--hover-bg); }
+.track-item:focus { outline: none; }
 
 .track-item.active {
     background: var(--active-bg);

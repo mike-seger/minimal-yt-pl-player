@@ -33,6 +33,10 @@
           <div class="select-option" data-action="select-disabled">Select all disabled</div>
           <div class="select-option" data-action="copy-tsv">Copy selection as TSV</div>
           <div class="select-option select-option-danger" data-action="remove">Remove selected items</div>
+          <div class="select-separator"></div>
+          <div class="select-option select-option-toggle" data-action="hide-unselected">Hide unselected tracks</div>
+          <div class="select-option select-option-toggle" data-action="toggle-hide-restricted">Hide restricted tracks</div>
+          <div class="select-option select-option-toggle" data-action="toggle-disable-restricted">Disable restricted tracks</div>
         </div>
       </div>
       <input id="track-filter" type="search" placeholder="Filter tracks…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
@@ -49,13 +53,6 @@
         <button id="settings-close" class="settings-close-btn">&#10005;</button>
       </div>
       <div class="settings-body">
-
-        <section class="settings-section">
-          <label class="settings-checkbox-row">
-            <input type="checkbox" id="setting-hide-restricted" autocomplete="off">
-            <span>Hide restricted tracks</span>
-          </label>
-        </section>
 
         <section class="settings-section">
           <div class="settings-section-title">Playlists</div>
