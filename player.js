@@ -1,5 +1,6 @@
 import {
   isHideRestricted, setHideRestricted, isDisableRestricted, setDisableRestricted,
+  getScanConsecFailThreshold,
   getHiddenPlaylists, initSettings, updateScanButtons, recordFailedId,
   getPlaylistNameOverride,
 } from './settings.js';
@@ -16,10 +17,11 @@ import {
 const FULL_RENDER_THRESHOLD = 5_000;
 const VSCROLL_ITEM_H = 52; // px — must match --track-item-height in style.css
 // ── Scanner constants ──────────────────────────────────────────────────────────────────────
-const SCAN_TIMEOUT_MS       = 8000;  // raised from 6 s
-const SCAN_RETRIES          = 2;     // extra attempts for transient errors
-const SCAN_RETRY_DELAY_MS   = 2500;
-const SCAN_INTER_TRACK_MS   = 300;   // polite gap between tracks
+const SCAN_TIMEOUT_MS             = 8000;  // raised from 6 s
+const SCAN_RETRIES                = 2;     // extra attempts for transient errors
+const SCAN_RETRY_DELAY_MS         = 2500;
+const SCAN_INTER_TRACK_MS         = 300;   // polite gap between tracks
+const SCAN_CONSEC_FAIL_THRESHOLD  = 10;   // default; overridden at runtime by getScanConsecFailThreshold()
 // YT error codes that are permanent (no point retrying):
 const PERMANENT_YT_ERRORS   = new Set([100, 101, 150]);
 // ── Resume persistence ────────────────────────────────────────────────────────
@@ -63,6 +65,7 @@ let _hideUnselected = false;     // when true, only selected tracks are shown
 
 // Scan state (separate from normal playback)
 let _scanActive = false;
+let _playConsecFails = 0;  // consecutive errors during normal playback
 let _scanCurrentItem = null;  // item being tested during scan
 let _scanningIdx = -1;        // items[] index of the track currently being scanned (for UI highlight)
 let _scanResolveTrack = null; // resolves the per-track promise
@@ -160,6 +163,7 @@ window.onYouTubeIframeAPIReady = function () {
           const item  = items[currentIndex];
           const label = item ? (item.title || item.videoId || '') : '–';
           nowPlayingEl.innerHTML = `<span>Now playing:</span>${escapeHtml(label)}`;
+          _playConsecFails = 0;  // successful play — reset counter
           // If this track was marked restricted but just played successfully, clear it.
           if (item?.restricted && item.videoId) {
             item.restricted = false;
@@ -192,6 +196,11 @@ window.onYouTubeIframeAPIReady = function () {
           _persistRestricted(errId, true);
           renderTrackList();
           _refreshTrackCounts();
+        }
+        _playConsecFails++;
+        if (_playConsecFails >= getScanConsecFailThreshold()) {
+          _playConsecFails = 0;
+          return; // stop advancing — too many consecutive failures
         }
         if (currentIndex < items.length - 1) setTimeout(() => {
           const nextIdx = _nextVisibleIdx(currentIndex, 1);
@@ -304,6 +313,8 @@ async function scanAllTracks(onProgress) {
   } : null;
   _scanMute();
   let found = 0;
+  let consecutiveFails = 0;
+  const recentFailed = []; // rolling window for rollback on threshold
   const candidates = items.filter(it => it.restricted == null && it.videoId);
   const total = candidates.length;
   let scanned = 0;
@@ -319,10 +330,23 @@ async function scanAllTracks(onProgress) {
     if (result === 'fail') {
       found++;
       _persistRestricted(item.videoId, true);
+      recentFailed.push(item);
+      if (recentFailed.length > getScanConsecFailThreshold()) recentFailed.shift();
+      consecutiveFails++;
       renderTrackList();
       _refreshTrackCounts();
+      if (consecutiveFails >= getScanConsecFailThreshold()) {
+        // YT appears to be blocking everything — revert the last N results
+        for (const fi of recentFailed) _persistRestricted(fi.videoId, null);
+        renderTrackList();
+        _refreshTrackCounts();
+        _scanActive = false;
+        break;
+      }
     } else if (result === 'ok') {
       _persistRestricted(item.videoId, false);
+      consecutiveFails = 0;
+      recentFailed.length = 0;
     }
 
     if (_scanActive) await new Promise(r => setTimeout(r, SCAN_INTER_TRACK_MS));
@@ -346,6 +370,7 @@ async function scanRestrictedTracks(onProgress) {
   } : null;
   _scanMute();
   let unblocked = 0;
+  let consecutiveFails = 0;
   const candidates = items.filter(it => it.restricted === true && it.videoId);
   const total = candidates.length;
   let scanned = 0;
@@ -363,6 +388,13 @@ async function scanRestrictedTracks(onProgress) {
       _persistRestricted(item.videoId, false);
       renderTrackList();
       _refreshTrackCounts();
+      consecutiveFails = 0;
+    } else {
+      consecutiveFails++;
+      if (consecutiveFails >= getScanConsecFailThreshold()) {
+        _scanActive = false;
+        break;
+      }
     }
 
     if (_scanActive) await new Promise(r => setTimeout(r, SCAN_INTER_TRACK_MS));
