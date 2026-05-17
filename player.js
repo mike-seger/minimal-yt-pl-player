@@ -160,6 +160,13 @@ window.onYouTubeIframeAPIReady = function () {
           const item  = items[currentIndex];
           const label = item ? (item.title || item.videoId || '') : '–';
           nowPlayingEl.innerHTML = `<span>Now playing:</span>${escapeHtml(label)}`;
+          // If this track was marked restricted but just played successfully, clear it.
+          if (item?.restricted && item.videoId) {
+            item.restricted = false;
+            _persistRestricted(item.videoId, false);
+            renderTrackList();
+            _refreshTrackCounts();
+          }
         }
         if (e.data === YT.PlayerState.ENDED) {
           const nextIdx = _nextVisibleIdx(currentIndex, 1);
