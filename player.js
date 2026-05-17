@@ -464,7 +464,7 @@ function rebuildAllPlaylists() {
   })), ...customPls];
 }
 
-async function switchPlaylist(url, restoreResume = false) {
+async function switchPlaylist(url, restoreResume = false, deepLinkTarget = null) {
   // Save current filter and position before switching
   if (activePlaylistUrl && currentIndex >= 0 && ytReady && ytPlayer) {
     try { saveResume(currentIndex, Math.floor(ytPlayer.getCurrentTime() ?? 0)); } catch {}
@@ -541,7 +541,16 @@ async function switchPlaylist(url, restoreResume = false) {
 
   if (!items.length) return;
 
-  if (restoreResume) {
+  if (deepLinkTarget) {
+    let idx = -1;
+    if (deepLinkTarget.videoId)
+      idx = items.findIndex(it => it.videoId === deepLinkTarget.videoId);
+    if (idx < 0 && deepLinkTarget.title) {
+      const lc = deepLinkTarget.title.toLowerCase();
+      idx = items.findIndex(it => (it.title ?? '').toLowerCase() === lc);
+    }
+    playIndex(idx >= 0 ? idx : 0);
+  } else if (restoreResume) {
     const startIndex = (plState.index >= 0 && plState.index < items.length) ? plState.index : 0;
     const startPos   = plState.positionSec ?? 0;
     playIndex(startIndex, startPos);
@@ -639,6 +648,19 @@ async function loadPlaylist() {
   }));
 
   rebuildAllPlaylists();
+
+  // ── Deep link handling ──────────────────────────────────────────────────────
+  const _dlParams = new URLSearchParams(window.location.search);
+  const _dlPl = _dlParams.get('pl');
+  const _dlV  = _dlParams.get('v');
+  const _dlT  = _dlParams.get('t');
+  const _dlEntry = _dlPl ? allPlaylists.find(p => p.url === _dlPl || p.id === _dlPl) : null;
+
+  if (_dlEntry) {
+    await switchPlaylist(_dlEntry.url, false, { videoId: _dlV, title: _dlT });
+    return;
+  }
+  // ── End deep link handling ──────────────────────────────────────────────────
 
   initSettings({
     onHideRestrictedChange: () => renderTrackList(),
@@ -833,6 +855,18 @@ function _copySelectionTsv() {
   if (rows.length) navigator.clipboard.writeText(rows.join('\n'));
 }
 
+function _copyPlayerLink() {
+  const entry = allPlaylists.find(p => p.url === activePlaylistUrl);
+  const item  = items[currentIndex];
+  if (!entry || !item) return;
+  const params = new URLSearchParams();
+  params.set('pl', entry.url);
+  if (item.videoId) params.set('v', item.videoId);
+  if (item.title)   params.set('t', item.title);
+  const base = window.location.origin + window.location.pathname;
+  navigator.clipboard.writeText(`${base}?${params}`);
+}
+
 async function _removeSelected() {
   if (!_selectedIds.size) return;
   const n = _selectedIds.size;
@@ -900,6 +934,7 @@ selectDropEl.addEventListener('click', async (e) => {
   if (action === 'select-enabled')            _selectByRestricted(false);
   if (action === 'select-disabled')           _selectByRestricted(true);
   if (action === 'copy-tsv')                  _copySelectionTsv();
+  if (action === 'copy-link')                 _copyPlayerLink();
   if (action === 'hide-unselected')           { _hideUnselected = !_hideUnselected; renderTrackList(); }
   if (action === 'remove')                    await _removeSelected();
   if (action === 'toggle-hide-restricted')    setHideRestricted(!isHideRestricted());
