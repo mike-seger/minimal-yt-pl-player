@@ -383,6 +383,32 @@ export async function downloadPlaylist({ url, title, customId, fetchFn }) {
     }
   }
 
+  // Apply videoId and attribute (title/year) overrides
+  if (Array.isArray(data.items)) {
+    const vidOv  = _plState[url]?.videoIdOverrides ?? {};
+    const attrOv = _plState[url]?.trackOverrides   ?? {};
+    if (Object.keys(vidOv).length > 0 || Object.keys(attrOv).length > 0) {
+      data = {
+        ...data,
+        items: data.items.map(it => {
+          const key = it.videoId ?? ('\x00' + (it.title ?? ''));
+          let out = it;
+          if (key in vidOv)  out = { ...out, videoId: vidOv[key] };
+          if (key in attrOv) out = { ...out, ...attrOv[key] };
+          return out;
+        }),
+      };
+    }
+  }
+
+  // Filter out removed tracks
+  if (Array.isArray(data.items)) {
+    const removedIds = new Set(_plState[url]?.removed ?? []);
+    if (removedIds.size > 0) {
+      data = { ...data, items: data.items.filter(it => !it.videoId || !removedIds.has(it.videoId)) };
+    }
+  }
+
   // Embed pre-computed counts so playlists.json entries can skip the full-file prefetch
   if (Array.isArray(data.items)) {
     data = {
