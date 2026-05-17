@@ -649,19 +649,6 @@ async function loadPlaylist() {
 
   rebuildAllPlaylists();
 
-  // ── Deep link handling ──────────────────────────────────────────────────────
-  const _dlParams = new URLSearchParams(window.location.search);
-  const _dlPl = _dlParams.get('pl');
-  const _dlV  = _dlParams.get('v');
-  const _dlT  = _dlParams.get('t');
-  const _dlEntry = _dlPl ? allPlaylists.find(p => p.url === _dlPl || p.id === _dlPl) : null;
-
-  if (_dlEntry) {
-    await switchPlaylist(_dlEntry.url, false, { videoId: _dlV, title: _dlT });
-    return;
-  }
-  // ── End deep link handling ──────────────────────────────────────────────────
-
   initSettings({
     onHideRestrictedChange: () => renderTrackList(),
     onPlaylistsChange:      () => { rebuildAllPlaylists(); renderPickerDropdown(); },
@@ -687,6 +674,19 @@ async function loadPlaylist() {
       }
     },
   });
+
+  // ── Deep link handling ──────────────────────────────────────────────────────
+  const _dlParams = new URLSearchParams(window.location.search);
+  const _dlPl = _dlParams.get('pl');
+  const _dlV  = _dlParams.get('v');
+  const _dlT  = _dlParams.get('t');
+  const _dlEntry = _dlPl ? allPlaylists.find(p => p.url === _dlPl || p.id === _dlPl) : null;
+
+  if (_dlEntry) {
+    await switchPlaylist(_dlEntry.url, false, { videoId: _dlV, title: _dlT });
+    return;
+  }
+  // ── End deep link handling ──────────────────────────────────────────────────
 
   // Start with saved playlist (if still available and not hidden), else first non-hidden
   const hidden = getHiddenPlaylists();
