@@ -1,7 +1,7 @@
 {
   "id": "custom-1779020612773-c5gau",
   "title": "trance db",
-  "fetchedAt": "2026-05-17T12:23:32.770Z",
+  "fetchedAt": "2026-05-17T15:49:00.528Z",
   "items": [
     {
       "videoId": "kUs504Xdd8E",
@@ -40,9 +40,9 @@
       "year": 1989
     },
     {
-      "videoId": "PSaUnMCi4zk",
-      "title": "Psycho Team - Psycho",
-      "restricted": false,
+      "videoId": "Yu10ApkBMv8",
+      "title": "Psycho Team - Psycho (Psychologic Version)",
+      "restricted": true,
       "year": 1989
     },
     {
@@ -52,13 +52,13 @@
       "year": 1989
     },
     {
-      "videoId": "by-5wGtgk90",
+      "videoId": "sMsVgP8OdCs",
       "title": "Psycho Team - Psycho (Psychologic Version)",
-      "restricted": false,
+      "restricted": true,
       "year": 1989
     },
     {
-      "videoId": "hzFcmiKQsPM",
+      "videoId": "YcMd9uINpBM",
       "title": "Sigmund Und Seine Freunde - Erdbeermund (DJ-Strawberry-Shake Mix)",
       "restricted": false,
       "year": 1989
@@ -82,9 +82,9 @@
       "year": 1989
     },
     {
-      "videoId": "L1cJPO08C-8",
+      "videoId": "qw-LgDdkxyM",
       "title": "The KLF - 3 A.M. Eternal",
-      "restricted": false,
+      "restricted": true,
       "year": 1989
     },
     {
@@ -106,7 +106,7 @@
       "year": 1989
     },
     {
-      "videoId": "NjEkz1VVlGQ",
+      "videoId": "2mQtIgcUKk4",
       "title": "The KLF - Trance Kylie Express",
       "restricted": false,
       "year": 1989
@@ -136,9 +136,9 @@
       "year": 1989
     },
     {
-      "videoId": "jb7gBw29czA",
+      "videoId": "Z61DhLI6FbE",
       "title": "Age Of Chance - Higher Than Heaven (Inst)",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -148,15 +148,15 @@
       "year": 1990
     },
     {
-      "videoId": "vB2KnaDKH0U",
+      "videoId": "Ixa66hSd5yc",
       "title": "Age Of Love - The Age Of Love (Flying Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
-      "videoId": "cHiScYhUVgk",
+      "videoId": "M6lPce2aK74",
       "title": "Astralasia - Astralasia Pt 2",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -168,49 +168,7 @@
     {
       "videoId": "Mti_HXMkz4o",
       "title": "Astralasia - Sexsquat",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "LH-5YcGVzD8",
-      "title": "Atahualpa - Cultivos",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "cwloHeEKY1s",
-      "title": "Atahualpa - La Furia Y El Condor",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "ABa8ux79sJY",
-      "title": "Atahualpa - Linda Paisanita",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "5kug8VPEZp0",
-      "title": "Atahualpa - Luna De Sangre (Vocal Remix)",
-      "restricted": false,
-      "year": 2000
-    },
-    {
-      "videoId": "yRGt1p8Ducc",
-      "title": "Atahualpa - Pio Pio",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "_OXHAOte8qA",
-      "title": "Atahualpa - Ultimo Imperio",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "PofdVIyXoJ4",
-      "title": "Atahualpa - Ultimo Imperio (Tendenthia Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -232,15 +190,15 @@
       "year": 1990
     },
     {
-      "videoId": "WgtrDRaEPPg",
+      "videoId": "M2PFyvaZhLo",
       "title": "Bassomatic - In The Realm Of The Senses (Fantasy Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
       "videoId": "7FP-a3X88ig",
       "title": "Bassomatic - In The Realm Of The Senses (Funky Paradise Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -268,20 +226,8 @@
       "year": 1990
     },
     {
-      "videoId": "8Lq2jFU5W0Q",
-      "title": "\"Blue Pearl - \"\"Naked In The Rain (12\"\"\"\" Extended Mix)\"\"\"",
-      "restricted": false,
-      "year": 1990
-    },
-    {
       "videoId": "GDY_vEtQQ5k",
       "title": "Blue Pearl - Naked In The Rain (Instrumental Mix)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "6_YOPWmJcR4",
-      "title": "Blue Pearl - Naked In The Rain (Massey's 808 Jazz Mix)",
       "restricted": false,
       "year": 1990
     },
@@ -310,45 +256,9 @@
       "year": 1990
     },
     {
-      "videoId": "LPtuEfYv0PE",
+      "videoId": "1Ym7xc6Nf8I",
       "title": "D-Shake - Techno Trance (Paradise Is Now)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "tHDr_rbNkgI",
-      "title": "D-Shake - Techno Trance (The Next Generation)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "pbwDi-kWMSQ",
-      "title": "D-Shake - Techno Tranced (Feel The Space)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "XhzU80qcJsE",
-      "title": "D-Shake - Yaaah (Freestyle Club Mix)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "NL-aARy6Tus",
-      "title": "D-Shake - Yaaah (Mark Spoon's Cut)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "L8wSzAkEXkg",
-      "title": "D-Shake - Yaaah (Techno Trance - Paradise Is Now)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "EQ76w-iJpXk",
-      "title": "D-Shake - Yaaah (Techno Trance - Revisited)",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -364,57 +274,15 @@
       "year": 1990
     },
     {
-      "videoId": "qc9391UXPO8",
+      "videoId": "tFkofUcl-QA",
       "title": "Dance 2 Trance - We Came In Peace",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
       "videoId": "xRHf3zZE4OQ",
       "title": "Delta Angel - THIS CONFUSION (LONE RANGER MIX)",
       "restricted": true,
-      "year": 1990
-    },
-    {
-      "videoId": "LmWi1-PIaM4",
-      "title": "Depeche Mode - Happiest Girl (The Pulsating Orbital Mix)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "aJR3JbkJdAA",
-      "title": "Depeche Mode - World In My Eyes (Dub In My Eyes)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "At6BGy7JtkM",
-      "title": "Depeche Mode - World In My Eyes (Mode To Joy)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "sa5GS2wSQTc",
-      "title": "Enigma - Mea Culpa Part II (Fading Shades Mix)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "uT4cssfunB0",
-      "title": "Enigma - Mea Culpa Part II (LP Version)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "smldgtupcE4",
-      "title": "Enigma - Sadeness (Extended Trance Mix)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "tl0jmpkniNk",
-      "title": "Enigma - Sadeness (Violent U.S. Mix)",
-      "restricted": false,
       "year": 1990
     },
     {
@@ -426,30 +294,6 @@
     {
       "videoId": "qvhziPrnNCI",
       "title": "Fortran 5 - Love Baby (Electropathy Mix)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "xVJ7KQPoNMM",
-      "title": "Guru Josh - Guru Josh Infinity 1990s Time For The Guru 7'' Mix",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "DQle7hAPpyE",
-      "title": "Guru Josh - Infinity (1990's: Time For The Guru)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "rFXHwFoFaHA",
-      "title": "\"Guru Josh - \"\"Whose Law (Is It Anyway?) (12\"\"\"\" Version)\"\"\"",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "P21PffcigD8",
-      "title": "Guru Josh - Whose Law (Is It Anyway?) (Speedball Mix)",
       "restricted": false,
       "year": 1990
     },
@@ -504,25 +348,7 @@
     {
       "videoId": "hP4Tnz93kwU",
       "title": "Liaisons D - Stress-Free (The Gate Is Open...) (Original Mix)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "5rex84BB3vk",
-      "title": "Lux - Deep Down (Club)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "O4YLKtBSaLE",
-      "title": "Lux - Deep Down (Dedicated Deep Age)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "IeJFnxtQD5w",
-      "title": "Lux - Deep Down (New Age Vocal)",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -534,12 +360,6 @@
     {
       "videoId": "LjnmVFDKgaY",
       "title": "Marabù - Heroes In Hell",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "iLB1BHOHs1E",
-      "title": "Marabù - Heroes In Hell (Instrumental)",
       "restricted": false,
       "year": 1990
     },
@@ -576,13 +396,13 @@
     {
       "videoId": "8cLSNbpEnlI",
       "title": "New Scene - Out Of Control II",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
-      "videoId": "kgw-2VUBsw8",
+      "videoId": "v93bnyoKUio",
       "title": "New Scene - The War In Vietnam",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -640,12 +460,6 @@
       "year": 1990
     },
     {
-      "videoId": "p6xMOTjLIaY",
-      "title": "Pyramid Orchestra - Kult & Magie (Deutsche Version)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
       "videoId": "eK2D_xOeGuk",
       "title": "Pyramid Orchestra - Kult & Magie (English Version)",
       "restricted": false,
@@ -654,19 +468,19 @@
     {
       "videoId": "FkyJ8JV3SPs",
       "title": "Quazar - Day-Glo",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
       "videoId": "8ekOPFk3sIs",
       "title": "Quazar - Moon Turns The Tide",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
       "videoId": "BUiSsMUSe34",
       "title": "Quazar - The Seven Stars",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -798,7 +612,7 @@
     {
       "videoId": "hngidYRzzT0",
       "title": "The KLF - What Time Is Love? (Moody Boys Vs Klf Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -810,7 +624,7 @@
     {
       "videoId": "O_253-HURY8",
       "title": "The KLF Featuring The Children Of The Revolution - What Time Is Love? (Techno Gate Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1990
     },
     {
@@ -850,30 +664,6 @@
       "year": 1990
     },
     {
-      "videoId": "g5SNh3ndW_Y",
-      "title": "Third Ear Band - Behind The Pyramids",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "AeY2kozJaQ8",
-      "title": "Third Ear Band - Necromacy",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "DY1g63XkDY8",
-      "title": "Third Ear Band - Reading The Runes",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "RBxgdg3pzFI",
-      "title": "Third Ear Band - Solstice Song",
-      "restricted": false,
-      "year": 1990
-    },
-    {
       "videoId": "nWTQhp-dAgQ",
       "title": "Time Modem - Insensitive World",
       "restricted": false,
@@ -882,18 +672,6 @@
     {
       "videoId": "YG_wD7PiMTo",
       "title": "Tomoaki Hirata - Past, Present, Future (Future Mix)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "KXas2ann228",
-      "title": "Trance Dance - Tales Of Mystery (Church Mix)",
-      "restricted": false,
-      "year": 1990
-    },
-    {
-      "videoId": "BxtZEoenV-A",
-      "title": "Trance Dance - Tales Of Mystery (Instrumental)",
       "restricted": false,
       "year": 1990
     },
@@ -908,12 +686,6 @@
       "title": "Trip Commando - Trip Commando (Techno Side)",
       "restricted": true,
       "year": 1990
-    },
-    {
-      "videoId": "bG9z-atG7gc",
-      "title": "Eurythmics - Sweet Dreams R Made Of These Who Am I To Disagree",
-      "restricted": false,
-      "year": 2004
     },
     {
       "videoId": "5WudN4xNYlU",
@@ -1008,7 +780,7 @@
     {
       "videoId": "NylLUMD9WXs",
       "title": "Astralasia - Rhythm Of Life",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1020,36 +792,6 @@
     {
       "videoId": "0Pvrxqlgslo",
       "title": "Atahualpa - Amuletos (Spiral Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "-Z3aZqI75Kc",
-      "title": "Bananarama - Tripping On Your Love (E. Smooth Chant Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "hx7Doen1xbc",
-      "title": "Bananarama - Tripping On Your Love (Euro Trance Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "4ysnFjEaD-k",
-      "title": "Bananarama - Tripping On Your Love (Indika Dub Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "2GLNGwE54gU",
-      "title": "Bananarama - Tripping On Your Love (Silky Dub)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "pLPBop3TQ0U",
-      "title": "Bananarama - Tripping On Your Love (Silky Seventies Mix)",
       "restricted": false,
       "year": 1991
     },
@@ -1132,20 +874,8 @@
       "year": 1991
     },
     {
-      "videoId": "4LTDB8c16qQ",
-      "title": "Culture Beat - Der Erdbeermund",
-      "restricted": false,
-      "year": 1991
-    },
-    {
       "videoId": "FR3q67k6ZH4",
       "title": "Culture Beat - Horizon",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "wV6TLv-29_0",
-      "title": "Culture Beat - It's Too Late",
       "restricted": false,
       "year": 1991
     },
@@ -1204,30 +934,6 @@
       "year": 1991
     },
     {
-      "videoId": "uRP3WY9ERTs",
-      "title": "D-Shake - Dance The Night Away",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "Sd4CG48Xo2I",
-      "title": "D-Shake - Dance The Night Away (Southside)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "yCZTLotiF4k",
-      "title": "D-Shake - My Heart, The Beat",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "_US9mDAqAp8",
-      "title": "D-Shake - My Heart, The Beat (Northside)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
       "videoId": "8HDcegL0o2Y",
       "title": "D-Shake - Trance Tracking",
       "restricted": false,
@@ -1236,7 +942,7 @@
     {
       "videoId": "YOt5Btd64Bk",
       "title": "Dance 2 Trance - ¿Where Is Dag?",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1290,7 +996,7 @@
     {
       "videoId": "S8U6KkBserU",
       "title": "DJ Roy Silver - Promised Land (Ambient Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1338,7 +1044,7 @@
     {
       "videoId": "OZy45IqaVXA",
       "title": "Eat Static - Medicine Wheel",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1390,12 +1096,6 @@
       "year": 1991
     },
     {
-      "videoId": "OPuZpU0QU04",
-      "title": "Electrotete - Anjuna Dawn (The Valentine Boys Remix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
       "videoId": "uEfAeE30e_U",
       "title": "Energy 52 - Eternity",
       "restricted": false,
@@ -1426,50 +1126,8 @@
       "year": 1991
     },
     {
-      "videoId": "vM1bfNlPsyA",
-      "title": "Erasure - Chorus",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "OL4SvpuW7qY",
-      "title": "Erasure - Chorus (Aggressive Trance Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "Zdbu46hR7Nw",
-      "title": "Erasure - Chorus (Pure Trance Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "g0MbwYpT8ow",
-      "title": "Erasure - Snappy",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "kYKLGSzqCh0",
-      "title": "Erasure - Snappy (Mix By Justin Robertson)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "EPR4raSVBu8",
-      "title": "Erasure - Snappy (The Spice Has Risen Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
       "videoId": "CL-893hKSzI",
       "title": "Extcy Club - Rave Party (Beats)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "C8G8cdbPmp8",
-      "title": "Extcy Club - Rave Party (Original Mix)",
       "restricted": false,
       "year": 1991
     },
@@ -1516,38 +1174,8 @@
       "year": 1991
     },
     {
-      "videoId": "Pt5H21lg3Pg",
-      "title": "Fluke - Heresy And The Garden Of Blighty",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "C0pReC3Hzw0",
-      "title": "Fluke - Pan Am Into Philly",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "xoPWJSMofts",
-      "title": "Fluke - Pearls Of Wisdom",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "T4Ih75Vl2A8",
-      "title": "Fluke - The Bells",
-      "restricted": false,
-      "year": 1991
-    },
-    {
       "videoId": "sZj8xwIDPxU",
       "title": "Fluke - The Bells (Mix 1)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "FtvQlfRBPSg",
-      "title": "Fluke - The Bells (Mix 2)",
       "restricted": false,
       "year": 1991
     },
@@ -1596,7 +1224,7 @@
     {
       "videoId": "1D7nNlTSysA",
       "title": "General Base - Mein Gott, Es Ist Voller Sterne (Death Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1608,7 +1236,7 @@
     {
       "videoId": "QWGx2xAwa_k",
       "title": "General Base - Mein Gott, Es Ist Voller Sterne (Supernova Techno-Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1620,13 +1248,13 @@
     {
       "videoId": "sHn9L9A7mM0",
       "title": "Groove Mercenary - Switch (House Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
       "videoId": "z7O2ROF_o3s",
       "title": "Groove Mercenary - Switch (Techno Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1650,7 +1278,7 @@
     {
       "videoId": "tgf2W3dmglo",
       "title": "Human Resource - Dominator (Remix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1698,7 +1326,7 @@
     {
       "videoId": "sWcA_Qnlbao",
       "title": "Interactive - Dance Mother",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1714,39 +1342,27 @@
       "year": 1991
     },
     {
-      "videoId": "oyhBDttTyc0",
-      "title": "Karen Cheryl Featuring Unlimited Groove - Serious Love (Bonus Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "6zjXiBiYfa4",
-      "title": "Karen Cheryl Featuring Unlimited Groove - Serious Love (Extended Dub Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
       "videoId": "y1QmGmvnhmI",
       "title": "Komakino - Dynacore",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
       "videoId": "M07LyIz1HKU",
       "title": "Komakino - Frogs In Space",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
       "videoId": "ClcdaUaRhIk",
       "title": "Komakino - Law & Order",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
       "videoId": "Sg9E3lr7Wjg",
       "title": "Komakino - Terra Nova",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1810,44 +1426,8 @@
       "year": 1991
     },
     {
-      "videoId": "GNkB3O8hSI0",
-      "title": "Love Corporation - Give Me Some Love",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "33cnQAxudqI",
-      "title": "Love Corporation - Lovers",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "dUvP1xPPqF0",
-      "title": "M.B. - Feel The Heat (Club Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "HoxUiWVgUg8",
-      "title": "M.B. - Feel The Heat (Rave Mix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "398DBfx7z0I",
-      "title": "M.B. - You Don't Get Stop (Remix)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
       "videoId": "MuwKKa-MJsc",
       "title": "M.T. / F.Q.P. - Goa Mix",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "UmW-QIvod6o",
-      "title": "M.T. / F.Q.P. - The Force",
       "restricted": false,
       "year": 1991
     },
@@ -1858,27 +1438,9 @@
       "year": 1991
     },
     {
-      "videoId": "g7XtUkQPG_w",
-      "title": "Magic Mushroom Band - Eight Miles High",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "-25LUdjH4FM",
-      "title": "Magic Mushroom Band - Pictures In My Mind",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "HjMuOWBTW-c",
-      "title": "Magic Mushroom Band - Squatter In The House",
-      "restricted": false,
-      "year": 1991
-    },
-    {
       "videoId": "GJ5Z4pZmdio",
       "title": "Magna Charta - Hymn (Monkomanic-Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1890,13 +1452,13 @@
     {
       "videoId": "8mmYYqqpwvQ",
       "title": "Mental Cube - Q (Santa Monica Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
       "videoId": "h1UrSpWSa_0",
       "title": "Mental Cube - So This Is Love",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1906,20 +1468,8 @@
       "year": 1991
     },
     {
-      "videoId": "FKLFn5TMV6A",
-      "title": "Metrixx - Is It True? (S-Mixx)",
-      "restricted": true,
-      "year": 1991
-    },
-    {
       "videoId": "vs50XO6aTXQ",
       "title": "Metrixx - Is It True? (To The Unknown)",
-      "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "u02907MIdTU",
-      "title": "Metrixx - Is It True? (XL-Mixx)",
       "restricted": false,
       "year": 1991
     },
@@ -1956,7 +1506,7 @@
     {
       "videoId": "aIYijrf1i7Y",
       "title": "Mignon Feat. Esra - Me Voy Soñando (This Is Not Heaven)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -1992,7 +1542,7 @@
     {
       "videoId": "zwPlNOq4Gzs",
       "title": "Moby - Go (Woodtick Mix)",
-      "restricted": false,
+      "restricted": true,
       "year": 1991
     },
     {
@@ -2833,18 +2383,6 @@
       "videoId": "1-TSetxgCGI",
       "title": "Zen Feat. H28 - Solar Data (Original Version)",
       "restricted": false,
-      "year": 1991
-    },
-    {
-      "videoId": "2jXHC_F9FYg",
-      "title": "Zenana - Just Dance",
-      "restricted": true,
-      "year": 1991
-    },
-    {
-      "videoId": "Mz6iBRwf-uc",
-      "title": "Zenana - Just Trance",
-      "restricted": true,
       "year": 1991
     },
     {
@@ -199552,6 +199090,7 @@
     {
       "videoId": "QZkTGgL0Mhs",
       "title": "Nightgroove - Limed (Not Limed)",
+      "restricted": true,
       "year": 1997
     },
     {
@@ -200578,6 +200117,7 @@
     {
       "videoId": "Km2u_uVZ410",
       "title": "\"Orinoko - \"\"Mama Konda (Timo Maas \"\"\"\"Low Budget\"\"\"\" Remix)\"\"\"",
+      "restricted": true,
       "year": 1997
     },
     {
@@ -549784,6 +549324,6 @@
       "year": 2009
     }
   ],
-  "playableCount": 103068,
-  "restrictedCount": 26
+  "playableCount": 102954,
+  "restrictedCount": 63
 }
