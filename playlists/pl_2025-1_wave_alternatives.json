@@ -708,51 +708,63 @@
     },
     {
       "videoId": "dx5ZqkHzFPM",
-      "title": "Hante. - Beyond The Waves"
+      "title": "Hante. - Beyond The Waves",
+      "restricted": true
     },
     {
       "videoId": "_6ZczHGT2wQ",
-      "title": "Hante. - In Raptures"
+      "title": "Hante. - In Raptures",
+      "restricted": false
     },
     {
       "videoId": "2lYJ4gP-wh4",
-      "title": "Hante. - Live to Die Another Day"
+      "title": "Hante. - Live to Die Another Day",
+      "restricted": true
     },
     {
       "videoId": "fChnyDYyGEM",
-      "title": "Hante. - Living in a French Movie"
+      "title": "Hante. - Living in a French Movie",
+      "restricted": false
     },
     {
       "videoId": "ezUvjjr_cmo",
-      "title": "Hante. - My Destruction"
+      "title": "Hante. - My Destruction",
+      "restricted": true
     },
     {
       "videoId": "oUdsm8xUhZg",
-      "title": "Hante.;Fragrance;Marble Slave - Nobody's Watching"
+      "title": "Hante.;Fragrance;Marble Slave - Nobody's Watching",
+      "restricted": true
     },
     {
       "videoId": "7Jynvbz4B64",
-      "title": "Hante. - Noir"
+      "title": "Hante. - Noir",
+      "restricted": false
     },
     {
       "videoId": "8-p5qkKy-CQ",
-      "title": "Hante. - Que Reste-t-il de Notre Amour ?"
+      "title": "Hante. - Que Reste-t-il de Notre Amour ?",
+      "restricted": true
     },
     {
       "videoId": "RiP0FBj9AUQ",
-      "title": "Hante. - RESPECT (Milliken Chamber Remix)"
+      "title": "Hante. - RESPECT (Milliken Chamber Remix)",
+      "restricted": true
     },
     {
       "videoId": "0rc_8GcIuWc",
-      "title": "Hante. - Une Nuit Avec Mon Ennemi"
+      "title": "Hante. - Une Nuit Avec Mon Ennemi",
+      "restricted": true
     },
     {
       "videoId": "PPuDBcMscL0",
-      "title": "Hante. - À Contrecoeur"
+      "title": "Hante. - À Contrecoeur",
+      "restricted": true
     },
     {
       "videoId": "sFOpqXj8N3U",
-      "title": "Hante. - Éternité"
+      "title": "Hante. - Éternité",
+      "restricted": true
     },
     {
       "videoId": "39vZbTC5O3g",
