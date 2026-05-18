@@ -34,6 +34,9 @@ minimal-yt-pl-player/
 ["./pl_2025-1_wave_alternatives.json"]
 ```
 
+Entries may also point to gzipped JSON playlists (for example `./pl_2025-1_wave_alternatives.json.gz`).
+Files ending in `.gz` are detected by extension and decompressed in the browser before parsing.
+
 Each playlist JSON file has the shape:
 
 ```json

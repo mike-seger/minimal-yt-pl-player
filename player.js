@@ -133,7 +133,21 @@ function ytWatch(videoId) {
 async function fetchJson(url) {
   const resp = await fetch(url, { cache: 'no-store' });
   if (!resp.ok) throw new Error(`HTTP ${resp.status} – ${url}`);
-  return resp.json();
+
+  const path = new URL(url, window.location.href).pathname.toLowerCase();
+  const isGzipByExt = path.endsWith('.gz');
+  if (!isGzipByExt) return resp.json();
+
+  if (typeof DecompressionStream !== 'function') {
+    throw new Error(`Gzip playlists are not supported in this browser: ${url}`);
+  }
+
+  const compressed = await resp.arrayBuffer();
+  const stream = new Blob([compressed])
+    .stream()
+    .pipeThrough(new DecompressionStream('gzip'));
+  const text = await new Response(stream).text();
+  return JSON.parse(text);
 }
 
 // ── YouTube IFrame API ────────────────────────────────────────────────────────
