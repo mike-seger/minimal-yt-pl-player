@@ -998,7 +998,7 @@ function _undoVideoIdOverride() {
   renderTrackList();
 }
 function _syncDropdownToggles() {
-  selectDropEl.querySelector('[data-action="hide-unselected"]')
+  selectDropEl.querySelector('[data-action="expose-selected"]')
     ?.classList.toggle('select-option-on', _hideUnselected);
   selectDropEl.querySelector('[data-action="toggle-hide-restricted"]')
     ?.classList.toggle('select-option-on', isHideRestricted());
@@ -1021,7 +1021,7 @@ selectDropEl.addEventListener('click', async (e) => {
   const opt = e.target.closest('.select-option');
   if (!opt) return;
   const action = opt.dataset.action;
-  const isToggle = action === 'hide-unselected' || action.startsWith('toggle-');
+  const isToggle = action === 'expose-selected' || action.startsWith('toggle-');
   if (!isToggle) selectDropEl.hidden = true;
   if (action === 'clear')                     await _clearSelection();
   if (action === 'invert')                    _invertSelection();
@@ -1029,7 +1029,7 @@ selectDropEl.addEventListener('click', async (e) => {
   if (action === 'select-disabled')           _selectByRestricted(true);
   if (action === 'copy-tsv')                  _copySelectionTsv();
   if (action === 'copy-link')                 _copyPlayerLink();
-  if (action === 'hide-unselected')           { _hideUnselected = !_hideUnselected; renderTrackList(); }
+  if (action === 'expose-selected')           { _hideUnselected = !_hideUnselected; renderTrackList(); }
   if (action === 'remove')                    await _removeSelected();
   if (action === 'toggle-hide-restricted')    setHideRestricted(!isHideRestricted());
   if (action === 'toggle-disable-restricted') setDisableRestricted(!isDisableRestricted());
